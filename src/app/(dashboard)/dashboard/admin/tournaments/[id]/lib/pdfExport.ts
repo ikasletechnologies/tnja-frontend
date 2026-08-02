@@ -2,7 +2,7 @@
 // DOM/window side effects (opens a print window), no React state.
 
 import type { BracketMatch, BracketSlot, DrawCategory, RegisteredPlayer, Tournament } from "../types";
-import { isDrawRoundRobin, roundName } from "./bracketEngine";
+import { isDrawRoundRobin, roundName, getRoundLabel, mainBracketRoundCount, getEliminationFormatLabel } from "./bracketEngine";
 
 export function printRegistrationSlip(player: RegisteredPlayer, tournament: Tournament | null) {
   const html = `
@@ -1088,4 +1088,1267 @@ export function exportRoundRobinPoolSheet(
     alert("Please allow popups to print.");
   }
 }
+
+export function exportEliminationBracketSheet(
+  tournament: Tournament | null,
+  categoryKey: string,
+  draw: DrawCategory,
+  players: RegisteredPlayer[]
+) {
+  if (!draw || !draw.rounds) return;
+
+  const catLabel = categoryKey.replace(/_/g, " ");
+  const parts = catLabel.split(" ");
+  const ageGroup = draw.ageGroup || parts[0] || "";
+  const gender = draw.gender || parts[1] || "";
+  const weight = draw.weightCategory === "ALL" ? "Open" : (draw.weightCategory || parts[2] || "");
+
+  const activePlayers = players.filter(p => p.status === "APPROVED");
+  const mainCount = mainBracketRoundCount(draw.rounds);
+  const formatLabel = getEliminationFormatLabel(draw.rounds);
+
+  const allMatches: {
+    roundIndex: number;
+    roundLabel: string;
+    matchNumber: number;
+    matNumber: number;
+    slotA: BracketSlot;
+    slotB: BracketSlot;
+    status: string;
+    winnerId: string | null;
+    scoreA?: any;
+    scoreB?: any;
+    elapsedSeconds?: number;
+    isFinal: boolean;
+    isBronze: boolean;
+  }[] = [];
+
+  draw.rounds.forEach((roundMatches, ri) => {
+    const roundLabel = getRoundLabel(draw.rounds, ri, false);
+    const isFinal = (ri === mainCount - 1);
+    const isBronze = (ri >= mainCount && ri === draw.rounds.length - 1);
+
+    roundMatches.forEach(m => {
+      allMatches.push({
+        roundIndex: ri,
+        roundLabel,
+        matchNumber: m.matchNumber,
+        matNumber: m.matNumber || draw.matNumber || 1,
+        slotA: m.slotA,
+        slotB: m.slotB,
+        status: m.status,
+        winnerId: m.winnerId,
+        scoreA: m.scoreA,
+        scoreB: m.scoreB,
+        elapsedSeconds: m.elapsedSeconds,
+        isFinal,
+        isBronze,
+      });
+    });
+  });
+
+  allMatches.sort((a, b) => a.matchNumber - b.matchNumber);
+
+  let goldWinnerName = "-";
+  let goldWinnerClub = "";
+  let silverWinnerName = "-";
+  let silverWinnerClub = "";
+  const bronzeWinners: { name: string; club: string }[] = [];
+
+  const finalMatch = allMatches.find(m => m.isFinal && !m.slotA.isBye && !m.slotB.isBye);
+  if (finalMatch && finalMatch.status === "COMPLETED" && finalMatch.winnerId) {
+    if (finalMatch.winnerId === finalMatch.slotA.playerId) {
+      goldWinnerName = finalMatch.slotA.playerName;
+      goldWinnerClub = activePlayers.find(p => p.id === finalMatch.slotA.playerId)?.club || "";
+      silverWinnerName = finalMatch.slotB.playerName;
+      silverWinnerClub = activePlayers.find(p => p.id === finalMatch.slotB.playerId)?.club || "";
+    } else if (finalMatch.winnerId === finalMatch.slotB.playerId) {
+      goldWinnerName = finalMatch.slotB.playerName;
+      goldWinnerClub = activePlayers.find(p => p.id === finalMatch.slotB.playerId)?.club || "";
+      silverWinnerName = finalMatch.slotA.playerName;
+      silverWinnerClub = activePlayers.find(p => p.id === finalMatch.slotA.playerId)?.club || "";
+    }
+  }
+
+  const bronzeMatches = allMatches.filter(m => m.isBronze && m.status === "COMPLETED" && m.winnerId);
+  bronzeMatches.forEach(bm => {
+    if (bm.winnerId === bm.slotA.playerId) {
+      const p = activePlayers.find(pl => pl.id === bm.slotA.playerId);
+      bronzeWinners.push({ name: bm.slotA.playerName, club: p?.club || "" });
+    } else if (bm.winnerId === bm.slotB.playerId) {
+      const p = activePlayers.find(pl => pl.id === bm.slotB.playerId);
+      bronzeWinners.push({ name: bm.slotB.playerName, club: p?.club || "" });
+    }
+  });
+
+  const formatTime = (sec?: number) => {
+    if (!sec) return "";
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  };
+
+  const formattedDate = tournament?.date ? new Date(tournament.date).toLocaleDateString("en-IN") : new Date().toLocaleDateString("en-IN");
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <title>Official Match Report - ${ageGroup} ${gender} ${weight}</title>
+      <style>
+        body { font-family: sans-serif; padding: 20px; color: #000; }
+        .official-header {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 12px;
+        }
+        .official-header td {
+          border: 1px solid #000;
+          padding: 10px;
+          font-size: 11px;
+          font-weight: bold;
+          vertical-align: middle;
+        }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        
+        .sub-header {
+          display: flex;
+          justify-content: space-between;
+          font-size: 13px;
+          font-weight: bold;
+          margin: 10px 0;
+          border-bottom: 2px solid #000;
+          padding-bottom: 6px;
+        }
+
+        .category-title {
+          font-size: 20px;
+          font-weight: 900;
+          margin: 15px 0 10px 0;
+          text-transform: uppercase;
+        }
+
+        .podium-box {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 12px;
+          margin-bottom: 24px;
+        }
+        .podium-card {
+          border: 2px solid #000;
+          padding: 10px;
+          text-align: center;
+          border-radius: 6px;
+          background-color: #f8fafc;
+        }
+        .podium-card.gold { border-color: #d97706; background-color: #fffbeb; }
+        .podium-card.silver { border-color: #64748b; background-color: #f1f5f9; }
+        .podium-card.bronze { border-color: #b45309; background-color: #fff7ed; }
+        .podium-place { font-size: 11px; font-weight: 900; uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .podium-name { font-size: 14px; font-weight: bold; color: #0f172a; }
+        .podium-club { font-size: 11px; color: #475569; }
+
+        .section-title {
+          font-size: 14px;
+          font-weight: bold;
+          margin: 20px 0 8px 0;
+          text-transform: uppercase;
+          border-bottom: 1px solid #000;
+          padding-bottom: 4px;
+        }
+
+        .data-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 25px;
+          font-size: 11px;
+        }
+        .data-table th, .data-table td {
+          border: 1px solid #000;
+          padding: 8px;
+          text-align: left;
+        }
+        .data-table th {
+          background-color: #f1f5f9;
+          font-weight: bold;
+        }
+        .data-table td.center, .data-table th.center {
+          text-align: center;
+        }
+        .winner-text {
+          font-weight: bold;
+          color: #15803d;
+        }
+        .bye-text {
+          color: #64748b;
+          font-style: italic;
+        }
+      </style>
+    </head>
+    <body>
+      <table class="official-header">
+        <tr>
+          <td style="width: 25%;">
+            TNJA TOURNAMENT SYSTEM<br>
+            <span style="font-weight:normal;">Tamil Nadu Judo Association</span>
+          </td>
+          <td class="text-center" style="font-size:15px; width:50%;">
+            OFFICIAL TOURNAMENT MATCH REPORT<br>
+            <span style="font-weight:normal; font-size:12px;">${tournament?.title || "Judo Championship"}</span>
+          </td>
+          <td class="text-right" style="width: 25%;">
+            Date: ${formattedDate}<br>
+            ${tournament?.location ? `Location: ${tournament.location}` : ""}
+          </td>
+        </tr>
+      </table>
+
+      <div class="category-title">
+        ${ageGroup} — ${gender} — ${weight}${weight && !String(weight).includes("kg") && weight !== "Open" ? " kg" : ""}
+      </div>
+      <div class="sub-header">
+        <span>Format: ${formatLabel}</span>
+        <span>Assigned Mat: MAT ${draw.matNumber || 1}</span>
+        <span>Total Competitors: ${activePlayers.length}</span>
+      </div>
+
+      <div class="podium-box">
+        <div class="podium-card gold">
+          <div class="podium-place" style="color: #b45309;">🥇 1ST PLACE (GOLD)</div>
+          <div class="podium-name">${goldWinnerName}</div>
+          <div class="podium-club">${goldWinnerClub || "—"}</div>
+        </div>
+        <div class="podium-card silver">
+          <div class="podium-place" style="color: #475569;">🥈 2ND PLACE (SILVER)</div>
+          <div class="podium-name">${silverWinnerName}</div>
+          <div class="podium-club">${silverWinnerClub || "—"}</div>
+        </div>
+        <div class="podium-card bronze">
+          <div class="podium-place" style="color: #9a3412;">🥉 3RD PLACE (BRONZE)</div>
+          <div class="podium-name">${bronzeWinners[0]?.name || "—"}</div>
+          <div class="podium-club">${bronzeWinners[0]?.club || "—"}</div>
+        </div>
+      </div>
+
+      <div class="section-title">Entire Match Results (${allMatches.length} Matches)</div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th class="center" style="width: 8%;">Mat</th>
+            <th class="center" style="width: 8%;">Match #</th>
+            <th style="width: 16%;">Round</th>
+            <th style="width: 23%;">White Athlete (Club)</th>
+            <th style="width: 23%;">Blue Athlete (Club)</th>
+            <th style="width: 14%;">Winner</th>
+            <th class="center" style="width: 8%;">Scores / Time</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${allMatches.map(m => {
+            const isBye = m.slotA.isBye || m.slotB.isBye;
+            const clubA = activePlayers.find(p => p.id === m.slotA.playerId)?.club || "—";
+            const clubB = activePlayers.find(p => p.id === m.slotB.playerId)?.club || "—";
+            const winnerName = m.winnerId === m.slotA.playerId
+              ? m.slotA.playerName
+              : m.winnerId === m.slotB.playerId
+              ? m.slotB.playerName
+              : isBye
+              ? "BYE"
+              : "—";
+
+            const scoreA_str = m.scoreA ? `${m.scoreA.ippon || 0}.${m.scoreA.wazaAri || 0}.${m.scoreA.yuko || 0}` : "0.0.0";
+            const scoreB_str = m.scoreB ? `${m.scoreB.ippon || 0}.${m.scoreB.wazaAri || 0}.${m.scoreB.yuko || 0}` : "0.0.0";
+            const scoreDisplay = m.status === "COMPLETED" && !isBye ? `${scoreA_str} / ${scoreB_str}${m.elapsedSeconds ? ` (${formatTime(m.elapsedSeconds)})` : ""}` : "—";
+
+            return `
+              <tr>
+                <td class="center" style="font-weight:bold;">${m.matNumber}</td>
+                <td class="center" style="font-weight:bold;">#${m.matchNumber}</td>
+                <td style="font-weight:bold;">${m.roundLabel}</td>
+                <td>
+                  <strong>${m.slotA.playerName}</strong><br>
+                  <span style="font-size:10px; color:#475569;">(${clubA})</span>
+                </td>
+                <td>
+                  <strong>${m.slotB.playerName}</strong><br>
+                  <span style="font-size:10px; color:#475569;">(${clubB})</span>
+                </td>
+                <td>
+                  ${
+                    winnerName === "BYE"
+                      ? '<span class="bye-text">BYE</span>'
+                      : winnerName !== "—"
+                      ? `<span class="winner-text">🏆 ${winnerName}</span>`
+                      : "—"
+                  }
+                </td>
+                <td class="center">${scoreDisplay}</td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+
+      <div class="section-title">Registered Competitors Roster (${activePlayers.length} Entries)</div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th class="center" style="width: 8%;">S.No</th>
+            <th class="center" style="width: 14%;">TNJA ID</th>
+            <th style="width: 32%;">Competitor Name</th>
+            <th style="width: 26%;">Club / District</th>
+            <th class="center" style="width: 10%;">Weight</th>
+            <th class="center" style="width: 10%;">Belt</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${activePlayers.map((p, idx) => `
+            <tr>
+              <td class="center" style="font-weight:bold;">${idx + 1}</td>
+              <td class="center">${p.tnjaId || "—"}</td>
+              <td style="font-weight:bold;">${p.name}</td>
+              <td>${p.club || p.district || "—"}</td>
+              <td class="center">${p.weight ? `${p.weight} kg` : "—"}</td>
+              <td class="center">${p.belt || "—"}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+
+      <div style="margin-top:20px; font-size:10px; color:#64748b; text-align:center;">
+        TNJA Tournament Management System — Generated on ${new Date().toLocaleString("en-IN")}
+      </div>
+    </body>
+    </html>
+  `;
+
+  const printWindow = window.open("", "_blank");
+  if (printWindow) {
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    setTimeout(() => {
+      printWindow.focus();
+      printWindow.print();
+    }, 250);
+  } else {
+    alert("Please allow popups to print the report.");
+  }
+}
+
+export function exportCategoryReport(
+  tournament: Tournament | null,
+  categoryKey: string,
+  draw: DrawCategory,
+  players: RegisteredPlayer[]
+) {
+  if (!draw || !draw.rounds) return;
+  if (isDrawRoundRobin(draw)) {
+    exportRoundRobinPoolSheet(tournament, categoryKey, draw, players);
+  } else {
+    exportEliminationBracketSheet(tournament, categoryKey, draw, players);
+  }
+}
+
+export function exportEliminationChartPDF(
+  tournament: Tournament | null,
+  categoryKey: string,
+  draw: DrawCategory,
+  players: RegisteredPlayer[]
+) {
+  if (!draw || !draw.rounds) return;
+
+  const catLabel = categoryKey.replace(/_/g, " ");
+  const parts = catLabel.split(" ");
+  const ageGroup = draw.ageGroup || parts[0] || "";
+  const gender = draw.gender || parts[1] || "";
+  const weight = draw.weightCategory === "ALL" ? "Open" : (draw.weightCategory || parts[2] || "");
+
+  const activePlayers = players.filter(p => p.status === "APPROVED");
+  const mainCount = mainBracketRoundCount(draw.rounds);
+  const formatLabel = getEliminationFormatLabel(draw.rounds);
+
+  let goldWinnerName = "-";
+  let goldWinnerClub = "";
+  let silverWinnerName = "-";
+  let silverWinnerClub = "";
+  const bronzeWinners: { name: string; club: string }[] = [];
+
+  const allMatches: any[] = [];
+  draw.rounds.forEach((roundMatches, ri) => {
+    const roundLabel = getRoundLabel(draw.rounds, ri, false);
+    const isFinal = (ri === mainCount - 1);
+    const isBronze = (ri >= mainCount && ri === draw.rounds.length - 1);
+
+    roundMatches.forEach(m => {
+      allMatches.push({
+        ...m,
+        roundIndex: ri,
+        roundLabel,
+        isFinal,
+        isBronze,
+      });
+    });
+  });
+
+  const finalMatch = allMatches.find(m => m.isFinal && !m.slotA.isBye && !m.slotB.isBye);
+  if (finalMatch && finalMatch.status === "COMPLETED" && finalMatch.winnerId) {
+    if (finalMatch.winnerId === finalMatch.slotA.playerId) {
+      goldWinnerName = finalMatch.slotA.playerName;
+      goldWinnerClub = activePlayers.find(p => p.id === finalMatch.slotA.playerId)?.club || "";
+      silverWinnerName = finalMatch.slotB.playerName;
+      silverWinnerClub = activePlayers.find(p => p.id === finalMatch.slotB.playerId)?.club || "";
+    } else if (finalMatch.winnerId === finalMatch.slotB.playerId) {
+      goldWinnerName = finalMatch.slotB.playerName;
+      goldWinnerClub = activePlayers.find(p => p.id === finalMatch.slotB.playerId)?.club || "";
+      silverWinnerName = finalMatch.slotA.playerName;
+      silverWinnerClub = activePlayers.find(p => p.id === finalMatch.slotA.playerId)?.club || "";
+    }
+  }
+
+  const bronzeMatches = allMatches.filter(m => m.isBronze && m.status === "COMPLETED" && m.winnerId);
+  bronzeMatches.forEach(bm => {
+    if (bm.winnerId === bm.slotA.playerId) {
+      const p = activePlayers.find(pl => pl.id === bm.slotA.playerId);
+      bronzeWinners.push({ name: bm.slotA.playerName, club: p?.club || "" });
+    } else if (bm.winnerId === bm.slotB.playerId) {
+      const p = activePlayers.find(pl => pl.id === bm.slotB.playerId);
+      bronzeWinners.push({ name: bm.slotB.playerName, club: p?.club || "" });
+    }
+  });
+
+  const formatTime = (sec?: number) => {
+    if (!sec) return "";
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  };
+
+  const formattedDate = tournament?.date ? new Date(tournament.date).toLocaleDateString("en-IN") : new Date().toLocaleDateString("en-IN");
+  const mainRounds = draw.rounds.slice(0, mainCount);
+  const repechageRounds = draw.rounds.slice(mainCount);
+
+  const renderMatchCard = (m: any) => {
+    const isBye = m.slotA.isBye || m.slotB.isBye;
+    const clubA = activePlayers.find(p => p.id === m.slotA.playerId)?.club || "";
+    const clubB = activePlayers.find(p => p.id === m.slotB.playerId)?.club || "";
+    const winnerA = m.winnerId && m.winnerId === m.slotA.playerId;
+    const winnerB = m.winnerId && m.winnerId === m.slotB.playerId;
+
+    const scoreA_str = m.scoreA ? `${m.scoreA.ippon || 0}.${m.scoreA.wazaAri || 0}.${m.scoreA.yuko || 0}` : "0.0.0";
+    const scoreB_str = m.scoreB ? `${m.scoreB.ippon || 0}.${m.scoreB.wazaAri || 0}.${m.scoreB.yuko || 0}` : "0.0.0";
+
+    const winnerName = winnerA
+      ? m.slotA.playerName
+      : winnerB
+      ? m.slotB.playerName
+      : isBye
+      ? "BYE"
+      : "";
+
+    return `
+      <div class="match-card ${m.status === 'COMPLETED' ? 'completed' : ''}">
+        <div class="match-card-top">
+          <span class="match-num">MATCH #${m.matchNumber}</span>
+          <span class="mat-num">MAT ${m.matNumber || draw.matNumber || 1}</span>
+        </div>
+        <div class="player-slot ${winnerA ? 'winner' : ''}">
+          <div class="player-info">
+            ${m.slotA.seedNumber ? `<span class="seed-badge">#${m.slotA.seedNumber}</span>` : ''}
+            <span class="player-name">${m.slotA.playerName || 'TBD'}</span>
+            <span class="player-club">${clubA ? `(${clubA})` : ''}</span>
+          </div>
+          <div class="score-pill">${scoreA_str}</div>
+        </div>
+        <div class="slot-divider"></div>
+        <div class="player-slot ${winnerB ? 'winner' : ''}">
+          <div class="player-info">
+            ${m.slotB.seedNumber ? `<span class="seed-badge">#${m.slotB.seedNumber}</span>` : ''}
+            <span class="player-name">${m.slotB.playerName || 'TBD'}</span>
+            <span class="player-club">${clubB ? `(${clubB})` : ''}</span>
+          </div>
+          <div class="score-pill">${scoreB_str}</div>
+        </div>
+        ${m.status === 'COMPLETED' && !isBye ? `
+          <div class="match-card-bottom">
+            <span>🏆 Winner: <strong>${winnerName}</strong></span>
+            <span>${m.elapsedSeconds ? formatTime(m.elapsedSeconds) : ''}</span>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  };
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <title>TNJA_Bracket_Chart_${catLabel.replace(/[^a-zA-Z0-9]/g, "_")}</title>
+      <style>
+        @page {
+          size: A4 landscape;
+          margin: 10mm;
+        }
+        * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #fff; color: #0f172a; margin: 0; padding: 15px; }
+        
+        @media print {
+          .no-print { display: none !important; }
+          body { padding: 0; }
+        }
+
+        .no-print {
+          background: #0f172a;
+          color: #fff;
+          padding: 12px 20px;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 20px;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .banner-title { font-weight: 800; font-size: 14px; display: block; color: #FF7400; }
+        .banner-subtitle { font-size: 12px; color: #cbd5e1; }
+        .print-btn {
+          background: #FF7400;
+          color: #fff;
+          border: none;
+          padding: 8px 16px;
+          border-radius: 8px;
+          font-weight: 800;
+          font-size: 12px;
+          cursor: pointer;
+        }
+
+        .header-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 15px;
+          border: 2px solid #0f172a;
+        }
+        .header-table td {
+          padding: 10px 14px;
+          border: 1px solid #cbd5e1;
+          vertical-align: middle;
+        }
+        .title-left { font-size: 11px; font-weight: 900; color: #FF7400; letter-spacing: 0.5px; }
+        .title-center { text-align: center; font-size: 20px; font-weight: 900; color: #0f172a; text-transform: uppercase; }
+        .title-sub { font-size: 11px; font-weight: 600; color: #475569; margin-top: 2px; }
+        .title-right { text-align: right; font-size: 11px; font-weight: bold; color: #334155; }
+
+        .podium-bar {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 12px;
+          margin-bottom: 20px;
+        }
+        .podium-box {
+          border: 2px solid #0f172a;
+          border-radius: 8px;
+          padding: 10px 14px;
+          text-align: center;
+        }
+        .podium-box.gold { background: #fffbeb; border-color: #d97706; }
+        .podium-box.silver { background: #f8fafc; border-color: #64748b; }
+        .podium-box.bronze { background: #fff7ed; border-color: #b45309; }
+        .podium-place { font-size: 11px; font-weight: 900; text-transform: uppercase; margin-bottom: 4px; }
+        .podium-box.gold .podium-place { color: #b45309; }
+        .podium-box.silver .podium-place { color: #475569; }
+        .podium-box.bronze .podium-place { color: #9a3412; }
+        .podium-name { font-size: 15px; font-weight: 900; color: #0f172a; }
+        .podium-club { font-size: 11px; color: #475569; }
+
+        .section-header {
+          font-size: 13px;
+          font-weight: 900;
+          text-transform: uppercase;
+          color: #0f172a;
+          border-bottom: 2px solid #0f172a;
+          padding-bottom: 6px;
+          margin: 24px 0 16px 0;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .bracket-tree {
+          display: flex;
+          gap: 24px;
+          align-items: stretch;
+          justify-content: flex-start;
+          margin-bottom: 25px;
+        }
+        .round-col {
+          flex: 1;
+          min-width: 230px;
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+        }
+        .round-title {
+          font-size: 11px;
+          font-weight: 900;
+          color: #FF7400;
+          text-transform: uppercase;
+          background: #f8fafc;
+          border: 1px solid #cbd5e1;
+          padding: 6px 10px;
+          border-radius: 6px;
+          text-align: center;
+        }
+        .round-matches {
+          display: flex;
+          flex-direction: column;
+          justify-content: space-around;
+          flex: 1;
+          gap: 14px;
+        }
+
+        .match-card {
+          border: 1.5px solid #cbd5e1;
+          border-radius: 8px;
+          background: #fff;
+          overflow: hidden;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .match-card.completed { border-color: #94a3b8; }
+        .match-card-top {
+          background: #f8fafc;
+          padding: 4px 8px;
+          font-size: 10px;
+          font-weight: 800;
+          color: #475569;
+          display: flex;
+          justify-content: space-between;
+          border-bottom: 1px solid #e2e8f0;
+        }
+        .match-num { color: #FF7400; }
+        .player-slot {
+          padding: 7px 10px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          font-size: 12px;
+        }
+        .player-slot.winner {
+          background: #f0fdf4;
+          font-weight: 800;
+        }
+        .player-info {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          overflow: hidden;
+        }
+        .seed-badge {
+          background: #fef3c7;
+          color: #b45309;
+          font-size: 10px;
+          font-weight: 900;
+          padding: 2px 5px;
+          border-radius: 4px;
+        }
+        .player-name { font-weight: 700; color: #0f172a; white-space: nowrap; }
+        .player-club { font-size: 10px; color: #64748b; white-space: nowrap; }
+        .score-pill {
+          background: #f1f5f9;
+          color: #0f172a;
+          font-size: 10px;
+          font-weight: 800;
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-family: monospace;
+        }
+        .player-slot.winner .score-pill {
+          background: #16a34a;
+          color: #fff;
+        }
+        .slot-divider {
+          height: 1px;
+          background: #e2e8f0;
+        }
+        .match-card-bottom {
+          background: #f8fafc;
+          border-top: 1px solid #e2e8f0;
+          padding: 4px 8px;
+          font-size: 10px;
+          color: #16a34a;
+          display: flex;
+          justify-content: space-between;
+          font-weight: 700;
+        }
+
+        .signatures-section {
+          margin-top: 40px;
+          padding-top: 25px;
+          border-top: 1px solid #cbd5e1;
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 30px;
+          text-align: center;
+        }
+        .sig-line {
+          border-top: 1px solid #0f172a;
+          padding-top: 6px;
+          font-size: 11px;
+          font-weight: 800;
+          color: #334155;
+          margin-top: 35px;
+        }
+        .footer-note {
+          margin-top: 25px;
+          text-align: center;
+          font-size: 10px;
+          color: #94a3b8;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="no-print">
+        <div>
+          <span class="banner-title">✨ Official TNJA Visual Competition Bracket Chart</span>
+          <span class="banner-subtitle">Click "Save as PDF" in your browser's print dialog to download this official chart as a PDF file.</span>
+        </div>
+        <button class="print-btn" onclick="window.print()">🖨️ Download / Save as PDF</button>
+      </div>
+
+      <table class="header-table">
+        <tr>
+          <td style="width: 25%;">
+            <div class="title-left">TNJA TOURNAMENT SYSTEM</div>
+            <div style="font-size: 10px; color: #475569;">Tamil Nadu Judo Association • IJF Rules</div>
+          </td>
+          <td style="width: 50%;">
+            <div class="title-center">OFFICIAL BRACKET CHART</div>
+            <div class="title-sub" style="text-align:center;">
+              <strong>${ageGroup}</strong> • <strong>${gender}</strong> • <strong>${weight}</strong> &nbsp;|&nbsp; MAT ${draw.matNumber || 1} &nbsp;|&nbsp; ${activePlayers.length} Competitors
+            </div>
+          </td>
+          <td class="title-right" style="width: 25%;">
+            <div>Date: ${formattedDate}</div>
+            <div>${tournament?.location || 'Tamil Nadu'}</div>
+          </td>
+        </tr>
+      </table>
+
+      <div class="podium-bar">
+        <div class="podium-box gold">
+          <div class="podium-place">🥇 1ST PLACE (GOLD)</div>
+          <div class="podium-name">${goldWinnerName}</div>
+          <div class="podium-club">${goldWinnerClub || '—'}</div>
+        </div>
+        <div class="podium-box silver">
+          <div class="podium-place">🥈 2ND PLACE (SILVER)</div>
+          <div class="podium-name">${silverWinnerName}</div>
+          <div class="podium-club">${silverWinnerClub || '—'}</div>
+        </div>
+        <div class="podium-box bronze">
+          <div class="podium-place">🥉 3RD PLACE (BRONZE)</div>
+          <div class="podium-name">${bronzeWinners[0]?.name || bronzeWinners.map(b => b.name).join(" / ") || '—'}</div>
+          <div class="podium-club">${bronzeWinners[0]?.club || bronzeWinners.map(b => b.club).join(" / ") || '—'}</div>
+        </div>
+      </div>
+
+      <div class="section-header">
+        <span>🏆</span> MAIN CHAMPIONSHIP BRACKET (${formatLabel})
+      </div>
+      <div class="bracket-tree">
+        ${mainRounds.map((round, ri) => `
+          <div class="round-col">
+            <div class="round-title">${getRoundLabel(draw.rounds, ri, false)}</div>
+            <div class="round-matches">
+              ${round.map(m => renderMatchCard({
+                ...m,
+                roundIndex: ri,
+                roundLabel: getRoundLabel(draw.rounds, ri, false),
+              })).join('')}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+
+      ${repechageRounds.length > 0 ? `
+        <div class="section-header" style="margin-top: 30px;">
+          <span>🛡️</span> REPECHAGE & BRONZE MEDAL BRACKETS
+        </div>
+        <div class="bracket-tree">
+          ${repechageRounds.map((round, ri) => `
+            <div class="round-col">
+              <div class="round-title">${getRoundLabel(draw.rounds, mainCount + ri, false)}</div>
+              <div class="round-matches">
+                ${round.map(m => renderMatchCard({
+                  ...m,
+                  roundIndex: mainCount + ri,
+                  roundLabel: getRoundLabel(draw.rounds, mainCount + ri, false),
+                })).join('')}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+
+      <div class="signatures-section">
+        <div>
+          <div class="sig-line">Chief Referee Signature</div>
+        </div>
+        <div>
+          <div class="sig-line">Tournament Director Signature</div>
+        </div>
+        <div>
+          <div class="sig-line">TNJA Official Seal & Timestamp</div>
+        </div>
+      </div>
+
+      <div class="footer-note">
+        TNJA Tournament Management System — Generated on ${new Date().toLocaleString("en-IN")} — Official Competition Bracket Chart
+      </div>
+    </body>
+    </html>
+  `;
+
+  const printWindow = window.open("", "_blank");
+  if (printWindow) {
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    setTimeout(() => {
+      printWindow.focus();
+      printWindow.print();
+    }, 300);
+  } else {
+    alert("Please allow popups to export the PDF Chart.");
+  }
+}
+
+export function exportRoundRobinChartPDF(
+  tournament: Tournament | null,
+  categoryKey: string,
+  draw: DrawCategory,
+  players: RegisteredPlayer[]
+) {
+  if (!draw || !draw.rounds) return;
+
+  const catLabel = categoryKey.replace(/_/g, " ");
+  const parts = catLabel.split(" ");
+  const ageGroup = draw.ageGroup || parts[0] || "";
+  const gender = draw.gender || parts[1] || "";
+  const weight = draw.weightCategory === "ALL" ? "Open" : (draw.weightCategory || parts[2] || "");
+  const activePlayers = players.filter(p => p.status === "APPROVED");
+
+  const allMatches: any[] = [];
+  draw.rounds.forEach(roundMatches => {
+    roundMatches.forEach(m => {
+      if (!m.slotA.isBye && !m.slotB.isBye) {
+        allMatches.push(m);
+      }
+    });
+  });
+
+  const standingsMap: Record<string, {
+    playerId: string;
+    name: string;
+    club: string;
+    wins: number;
+    points: number;
+    totalWinningTime: number;
+  }> = {};
+
+  activePlayers.forEach(p => {
+    standingsMap[p.id] = {
+      playerId: p.id,
+      name: p.name,
+      club: p.club || "",
+      wins: 0,
+      points: 0,
+      totalWinningTime: 0,
+    };
+  });
+
+  allMatches.forEach(m => {
+    if (m.status === "COMPLETED") {
+      const ptsA = m.scoreA ? ((m.scoreA.ippon || 0) * 100 + (m.scoreA.wazaAri || 0) * 10 + (m.scoreA.yuko || 0)) : 0;
+      const ptsB = m.scoreB ? ((m.scoreB.ippon || 0) * 100 + (m.scoreB.wazaAri || 0) * 10 + (m.scoreB.yuko || 0)) : 0;
+      if (standingsMap[m.slotA.playerId]) standingsMap[m.slotA.playerId].points += Math.min(ptsA, 100);
+      if (standingsMap[m.slotB.playerId]) standingsMap[m.slotB.playerId].points += Math.min(ptsB, 100);
+
+      if (m.winnerId && standingsMap[m.winnerId]) {
+        standingsMap[m.winnerId].wins += 1;
+        standingsMap[m.winnerId].totalWinningTime += (m.elapsedSeconds || 0);
+      }
+    }
+  });
+
+  const sortedPlayers = Object.values(standingsMap).sort((a, b) => {
+    if (b.wins !== a.wins) return b.wins - a.wins;
+    if (b.points !== a.points) return b.points - a.points;
+    return a.totalWinningTime - b.totalWinningTime;
+  });
+
+  const goldWinner = sortedPlayers[0];
+  const silverWinner = sortedPlayers[1];
+  const bronzeWinner = sortedPlayers[2];
+
+  const formatTime = (sec?: number) => {
+    if (!sec) return "";
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  };
+
+  const formattedDate = tournament?.date ? new Date(tournament.date).toLocaleDateString("en-IN") : new Date().toLocaleDateString("en-IN");
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <title>TNJA_Bracket_Chart_${catLabel.replace(/[^a-zA-Z0-9]/g, "_")}</title>
+      <style>
+        @page {
+          size: A4 landscape;
+          margin: 10mm;
+        }
+        * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #fff; color: #0f172a; margin: 0; padding: 15px; }
+        
+        @media print {
+          .no-print { display: none !important; }
+          body { padding: 0; }
+        }
+
+        .no-print {
+          background: #0f172a;
+          color: #fff;
+          padding: 12px 20px;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 20px;
+        }
+        .banner-title { font-weight: 800; font-size: 14px; color: #FF7400; display: block; }
+        .banner-subtitle { font-size: 12px; color: #cbd5e1; }
+        .print-btn {
+          background: #FF7400;
+          color: #fff;
+          border: none;
+          padding: 8px 16px;
+          border-radius: 8px;
+          font-weight: 800;
+          font-size: 12px;
+          cursor: pointer;
+        }
+
+        .header-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 15px;
+          border: 2px solid #0f172a;
+        }
+        .header-table td {
+          padding: 10px 14px;
+          border: 1px solid #cbd5e1;
+          vertical-align: middle;
+        }
+        .title-left { font-size: 11px; font-weight: 900; color: #FF7400; letter-spacing: 0.5px; }
+        .title-center { text-align: center; font-size: 20px; font-weight: 900; color: #0f172a; text-transform: uppercase; }
+        .title-sub { font-size: 11px; font-weight: 600; color: #475569; margin-top: 2px; }
+        .title-right { text-align: right; font-size: 11px; font-weight: bold; color: #334155; }
+
+        .podium-bar {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 12px;
+          margin-bottom: 20px;
+        }
+        .podium-box {
+          border: 2px solid #0f172a;
+          border-radius: 8px;
+          padding: 10px 14px;
+          text-align: center;
+        }
+        .podium-box.gold { background: #fffbeb; border-color: #d97706; }
+        .podium-box.silver { background: #f8fafc; border-color: #64748b; }
+        .podium-box.bronze { background: #fff7ed; border-color: #b45309; }
+        .podium-place { font-size: 11px; font-weight: 900; text-transform: uppercase; margin-bottom: 4px; }
+        .podium-box.gold .podium-place { color: #b45309; }
+        .podium-box.silver .podium-place { color: #475569; }
+        .podium-box.bronze .podium-place { color: #9a3412; }
+        .podium-name { font-size: 15px; font-weight: 900; color: #0f172a; }
+        .podium-club { font-size: 11px; color: #475569; }
+
+        .section-header {
+          font-size: 13px;
+          font-weight: 900;
+          text-transform: uppercase;
+          color: #0f172a;
+          border-bottom: 2px solid #0f172a;
+          padding-bottom: 6px;
+          margin: 24px 0 16px 0;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .pool-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 25px;
+          font-size: 12px;
+          border: 1.5px solid #0f172a;
+        }
+        .pool-table th, .pool-table td {
+          border: 1px solid #cbd5e1;
+          padding: 10px;
+          text-align: left;
+        }
+        .pool-table th {
+          background: #f8fafc;
+          font-weight: 900;
+          color: #334155;
+          text-transform: uppercase;
+          font-size: 11px;
+        }
+        .pool-table td.center, .pool-table th.center { text-align: center; }
+
+        .matches-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 14px;
+        }
+        .match-card {
+          border: 1.5px solid #cbd5e1;
+          border-radius: 8px;
+          background: #fff;
+          overflow: hidden;
+        }
+        .match-card-top {
+          background: #f8fafc;
+          padding: 4px 8px;
+          font-size: 10px;
+          font-weight: 800;
+          color: #475569;
+          display: flex;
+          justify-content: space-between;
+          border-bottom: 1px solid #e2e8f0;
+        }
+        .match-num { color: #FF7400; }
+        .player-slot {
+          padding: 7px 10px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          font-size: 12px;
+        }
+        .player-slot.winner {
+          background: #f0fdf4;
+          font-weight: 800;
+        }
+        .player-name { font-weight: 700; color: #0f172a; }
+        .player-club { font-size: 10px; color: #64748b; }
+        .score-pill {
+          background: #f1f5f9;
+          color: #0f172a;
+          font-size: 10px;
+          font-weight: 800;
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-family: monospace;
+        }
+        .player-slot.winner .score-pill {
+          background: #16a34a;
+          color: #fff;
+        }
+        .slot-divider { height: 1px; background: #e2e8f0; }
+
+        .signatures-section {
+          margin-top: 40px;
+          padding-top: 25px;
+          border-top: 1px solid #cbd5e1;
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 30px;
+          text-align: center;
+        }
+        .sig-line {
+          border-top: 1px solid #0f172a;
+          padding-top: 6px;
+          font-size: 11px;
+          font-weight: 800;
+          color: #334155;
+          margin-top: 35px;
+        }
+        .footer-note {
+          margin-top: 25px;
+          text-align: center;
+          font-size: 10px;
+          color: #94a3b8;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="no-print">
+        <div>
+          <span class="banner-title">✨ Official TNJA Visual Pool Chart</span>
+          <span class="banner-subtitle">Click "Save as PDF" in your browser's print dialog to download this official chart as a PDF file.</span>
+        </div>
+        <button class="print-btn" onclick="window.print()">🖨️ Download / Save as PDF</button>
+      </div>
+
+      <table class="header-table">
+        <tr>
+          <td style="width: 25%;">
+            <div class="title-left">TNJA TOURNAMENT SYSTEM</div>
+            <div style="font-size: 10px; color: #475569;">Tamil Nadu Judo Association • IJF Rules</div>
+          </td>
+          <td style="width: 50%;">
+            <div class="title-center">ROUND ROBIN POOL CHART</div>
+            <div class="title-sub" style="text-align:center;">
+              <strong>${ageGroup}</strong> • <strong>${gender}</strong> • <strong>${weight}</strong> &nbsp;|&nbsp; MAT ${draw.matNumber || 1} &nbsp;|&nbsp; ${activePlayers.length} Competitors
+            </div>
+          </td>
+          <td class="title-right" style="width: 25%;">
+            <div>Date: ${formattedDate}</div>
+            <div>${tournament?.location || 'Tamil Nadu'}</div>
+          </td>
+        </tr>
+      </table>
+
+      <div class="podium-bar">
+        <div class="podium-box gold">
+          <div class="podium-place">🥇 1ST PLACE (GOLD)</div>
+          <div class="podium-name">${goldWinner ? goldWinner.name : '—'}</div>
+          <div class="podium-club">${goldWinner ? goldWinner.club : '—'}</div>
+        </div>
+        <div class="podium-box silver">
+          <div class="podium-place">🥈 2ND PLACE (SILVER)</div>
+          <div class="podium-name">${silverWinner ? silverWinner.name : '—'}</div>
+          <div class="podium-club">${silverWinner ? silverWinner.club : '—'}</div>
+        </div>
+        <div class="podium-box bronze">
+          <div class="podium-place">🥉 3RD PLACE (BRONZE)</div>
+          <div class="podium-name">${bronzeWinner ? bronzeWinner.name : '—'}</div>
+          <div class="podium-club">${bronzeWinner ? bronzeWinner.club : '—'}</div>
+        </div>
+      </div>
+
+      <div class="section-header">
+        <span>📊</span> OFFICIAL ROUND ROBIN STANDINGS MATRIX
+      </div>
+      <table class="pool-table">
+        <thead>
+          <tr>
+            <th class="center" style="width: 45px;">Rank</th>
+            <th>Athlete Name</th>
+            <th>Club / District</th>
+            <th class="center" style="width: 70px;">Wins</th>
+            <th class="center" style="width: 80px;">Points</th>
+            <th class="center" style="width: 100px;">Winning Time</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${sortedPlayers.map((p, idx) => `
+            <tr>
+              <td class="center" style="font-weight: 900; ${idx === 0 ? 'color: #b45309;' : idx === 1 ? 'color: #475569;' : idx === 2 ? 'color: #9a3412;' : ''}">${idx + 1}</td>
+              <td style="font-weight: 700;">${p.name}</td>
+              <td style="color: #64748b;">${p.club || '—'}</td>
+              <td class="center" style="font-weight: 800; color: #16a34a;">${p.wins}</td>
+              <td class="center" style="font-weight: 800; color: #2563eb;">${p.points}</td>
+              <td class="center" style="color: #475569;">${formatTime(p.totalWinningTime)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+
+      <div class="section-header">
+        <span>⚔️</span> ROUND ROBIN CONTEST CARDS (${allMatches.length} Matches)
+      </div>
+      <div class="matches-grid">
+        ${allMatches.map(m => {
+          const clubA = activePlayers.find(p => p.id === m.slotA.playerId)?.club || "";
+          const clubB = activePlayers.find(p => p.id === m.slotB.playerId)?.club || "";
+          const winnerA = m.winnerId && m.winnerId === m.slotA.playerId;
+          const winnerB = m.winnerId && m.winnerId === m.slotB.playerId;
+
+          const scoreA_str = m.scoreA ? `${m.scoreA.ippon || 0}.${m.scoreA.wazaAri || 0}.${m.scoreA.yuko || 0}` : "0.0.0";
+          const scoreB_str = m.scoreB ? `${m.scoreB.ippon || 0}.${m.scoreB.wazaAri || 0}.${m.scoreB.yuko || 0}` : "0.0.0";
+
+          return `
+            <div class="match-card">
+              <div class="match-card-top">
+                <span class="match-num">MATCH #${m.matchNumber}</span>
+                <span class="mat-num">MAT ${m.matNumber || draw.matNumber || 1}</span>
+              </div>
+              <div class="player-slot ${winnerA ? 'winner' : ''}">
+                <div>
+                  <span class="player-name">${m.slotA.playerName}</span>
+                  <span class="player-club">${clubA ? `(${clubA})` : ''}</span>
+                </div>
+                <div class="score-pill">${scoreA_str}</div>
+              </div>
+              <div class="slot-divider"></div>
+              <div class="player-slot ${winnerB ? 'winner' : ''}">
+                <div>
+                  <span class="player-name">${m.slotB.playerName}</span>
+                  <span class="player-club">${clubB ? `(${clubB})` : ''}</span>
+                </div>
+                <div class="score-pill">${scoreB_str}</div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+
+      <div class="signatures-section">
+        <div>
+          <div class="sig-line">Chief Referee Signature</div>
+        </div>
+        <div>
+          <div class="sig-line">Tournament Director Signature</div>
+        </div>
+        <div>
+          <div class="sig-line">TNJA Official Seal & Timestamp</div>
+        </div>
+      </div>
+
+      <div class="footer-note">
+        TNJA Tournament Management System — Generated on ${new Date().toLocaleString("en-IN")} — Official Round Robin Chart
+      </div>
+    </body>
+    </html>
+  `;
+
+  const printWindow = window.open("", "_blank");
+  if (printWindow) {
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    setTimeout(() => {
+      printWindow.focus();
+      printWindow.print();
+    }, 300);
+  } else {
+    alert("Please allow popups to export the PDF Chart.");
+  }
+}
+
+export function exportCategoryChartPDF(
+  tournament: Tournament | null,
+  categoryKey: string,
+  draw: DrawCategory,
+  players: RegisteredPlayer[]
+) {
+  if (!draw || !draw.rounds) return;
+  if (isDrawRoundRobin(draw)) {
+    exportRoundRobinChartPDF(tournament, categoryKey, draw, players);
+  } else {
+    exportEliminationChartPDF(tournament, categoryKey, draw, players);
+  }
+}
+
+
 

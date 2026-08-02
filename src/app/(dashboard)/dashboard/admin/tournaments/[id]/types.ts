@@ -1,7 +1,7 @@
 // ─── Shared types for the tournament detail page and its components ──────────
 
 export type Tab = "overview" | "players" | "mats" | "draws" | "matches" | "results" | "weigh-in" | "disqualify";
-export type ViewMode = "list" | "bracket";
+export type ViewMode = "list" | "bracket" | "leaderboard";
 
 export interface Tournament {
   id: string; title: string; date: string; dateTo?: string;

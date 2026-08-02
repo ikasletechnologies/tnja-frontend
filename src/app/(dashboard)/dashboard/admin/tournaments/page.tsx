@@ -30,6 +30,56 @@ import FileUpload from "@/components/common/FileUpload";
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000/api";
 const AVAILABLE_CATEGORIES = ["Mini Sub Junior", "Sub Junior", "Cadet", "Junior", "Senior"];
 
+/** Format an ISO / yyyy-mm-dd date string as DD/MM/YYYY for display. */
+function formatDDMMYYYY(iso: string): string {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  if (!y || !m || !d || y.length !== 4) return "";
+  return `${d}/${m}/${y}`;
+}
+
+/**
+ * The real <input type="date"> behind our formatted overlay is invisible, so a user
+ * typing digits directly into it gets no feedback on segment boundaries (day/month/year)
+ * and can end up with garbage like a 6-digit year. Force every interaction through the
+ * native calendar popup instead, and block manual digit entry.
+ */
+function openDatePicker(e: React.FocusEvent<HTMLInputElement> | React.MouseEvent<HTMLInputElement>) {
+  const el = e.currentTarget as HTMLInputElement & { showPicker?: () => void };
+  try {
+    el.showPicker?.();
+  } catch {
+    // showPicker can throw if the browser blocks it outside a user gesture; safe to ignore.
+  }
+}
+function blockDateTyping(e: React.KeyboardEvent<HTMLInputElement>) {
+  if (/^[0-9]$/.test(e.key)) e.preventDefault();
+}
+
+function MarsIcon({ size = 18, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="10" cy="14" r="6" />
+      <path d="M15 9l6-6M15 3h6v6" />
+    </svg>
+  );
+}
+
+function VenusIcon({ size = 18, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="12" cy="9" r="6" />
+      <path d="M12 15v7M9 19h6" />
+    </svg>
+  );
+}
+
+function GenderIcon({ gender, size = 18, className = "" }: { gender: string; size?: number; className?: string }) {
+  if (gender === "MALE") return <MarsIcon size={size} className={className} />;
+  if (gender === "FEMALE") return <VenusIcon size={size} className={className} />;
+  return <Users size={size} className={className} />;
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "NOT_REQUIRED";
 
@@ -1088,15 +1138,6 @@ export default function AdminTournamentsPage() {
 
                         {/* Action buttons */}
                         <div className="mt-3 flex gap-2">
-                          <button
-                            onClick={() => handleDownloadReport(t.id, t.title)}
-                            disabled={downloadingReportId === t.id}
-                            className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-orange-50 hover:bg-orange-100 text-orange-600 font-bold rounded-xl text-sm transition-all border border-orange-200 shrink-0 disabled:opacity-50"
-                            title="Download tournament report"
-                          >
-                            {downloadingReportId === t.id ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                            <span className="hidden sm:inline">Report</span>
-                          </button>
                           {/* Edit button — only creator can edit */}
                           <button
                             onClick={() => openEditModal(t)}
@@ -1140,7 +1181,7 @@ export default function AdminTournamentsPage() {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="w-full max-w-2xl bg-white rounded-[2.5rem] p-10 shadow-2xl overflow-y-auto max-h-[90vh]"
+              className="w-full max-w-2xl lg:max-w-4xl bg-white rounded-[1.75rem] p-10 shadow-2xl overflow-y-auto max-h-[90vh]"
             >
               <div className="flex justify-between items-start mb-6">
                 <div>
@@ -1169,7 +1210,7 @@ export default function AdminTournamentsPage() {
                       required type="text" value={formData.title}
                       onChange={e => setFormData({ ...formData, title: e.target.value })}
                       placeholder="e.g. District Championship 2026"
-                      className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50"
+                      className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50"
                     />
                   </div>
 
@@ -1187,7 +1228,7 @@ export default function AdminTournamentsPage() {
                     <select
                       value={formData.level}
                       onChange={e => setFormData({ ...formData, level: e.target.value, zoneId: "", districtId: "", clubId: "" })}
-                      className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 font-semibold text-slate-900"
+                      className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 font-semibold text-slate-900"
                     >
                       <option value="CLUB">Club</option>
                       <option value="DISTRICT">District</option>
@@ -1204,7 +1245,7 @@ export default function AdminTournamentsPage() {
                         required
                         value={formData.zoneId || ""}
                         onChange={e => setFormData({ ...formData, zoneId: e.target.value })}
-                        className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 font-semibold text-slate-900"
+                        className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 font-semibold text-slate-900"
                       >
                         <option value="" disabled>Select a Zone</option>
                         {zones.map((zone) => (
@@ -1221,7 +1262,7 @@ export default function AdminTournamentsPage() {
                         required
                         value={formData.districtId || ""}
                         onChange={e => setFormData({ ...formData, districtId: e.target.value })}
-                        className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 font-semibold text-slate-900"
+                        className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 font-semibold text-slate-900"
                       >
                         <option value="" disabled>Select a District</option>
                         {districts.map((d) => (
@@ -1238,7 +1279,7 @@ export default function AdminTournamentsPage() {
                         <select
                           value={formData.districtId || ""}
                           onChange={e => setFormData({ ...formData, districtId: e.target.value, clubId: "" })}
-                          className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 font-semibold text-slate-900"
+                          className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 font-semibold text-slate-900"
                         >
                           <option value="">Select a District</option>
                           {districts.map((d) => (
@@ -1252,7 +1293,7 @@ export default function AdminTournamentsPage() {
                           required
                           value={formData.clubId || ""}
                           onChange={e => setFormData({ ...formData, clubId: e.target.value })}
-                          className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 font-semibold text-slate-900"
+                          className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 font-semibold text-slate-900"
                         >
                           <option value="" disabled>Select a Club</option>
                           {clubs
@@ -1267,43 +1308,64 @@ export default function AdminTournamentsPage() {
 
                   <div className={formData.level !== "ZONE" ? "md:col-span-1" : ""}>
                     <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Gender</label>
-                    <select
-                      value={formData.gender}
-                      onChange={e => setFormData({ ...formData, gender: e.target.value })}
-                      className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 font-semibold"
-                    >
-                      <option value="BOTH">Both</option>
-                      <option value="MALE">Male Only</option>
-                      <option value="FEMALE">Female Only</option>
-                    </select>
+                    <div className="relative">
+                      <GenderIcon gender={formData.gender} size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                      <select
+                        value={formData.gender}
+                        onChange={e => setFormData({ ...formData, gender: e.target.value })}
+                        className="w-full pl-11 pr-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 font-semibold"
+                      >
+                        <option value="BOTH">Both</option>
+                        <option value="MALE">Male Only</option>
+                        <option value="FEMALE">Female Only</option>
+                      </select>
+                    </div>
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Start Date *</label>
-                    <input
-                      required type="date" lang="en-GB" min={new Date().toISOString().split('T')[0]} value={formData.dateFrom}
-                      onChange={e => setFormData({ ...formData, dateFrom: e.target.value })}
-                      className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50"
-                    />
+                    <div className="relative">
+                      <input
+                        required type="date" min={new Date().toISOString().split('T')[0]} value={formData.dateFrom}
+                        onChange={e => setFormData({ ...formData, dateFrom: e.target.value })}
+                        onFocus={openDatePicker} onClick={openDatePicker} onKeyDown={blockDateTyping}
+                        className="peer absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                      />
+                      <div className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between peer-focus:ring-2 peer-focus:ring-[#FF7400]/50">
+                        <span className={formData.dateFrom ? "text-slate-800 font-medium" : "text-slate-400"}>
+                          {formData.dateFrom ? formatDDMMYYYY(formData.dateFrom) : "DD/MM/YYYY"}
+                        </span>
+                        <Calendar size={18} className="text-slate-400" />
+                      </div>
+                    </div>
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">End Date (optional)</label>
-                    <input
-                      type="date" lang="en-GB" min={formData.dateFrom || new Date().toISOString().split('T')[0]} value={formData.dateTo}
-                      onChange={e => setFormData({ ...formData, dateTo: e.target.value })}
-                      className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50"
-                    />
+                    <div className="relative">
+                      <input
+                        type="date" min={formData.dateFrom || new Date().toISOString().split('T')[0]} value={formData.dateTo}
+                        onChange={e => setFormData({ ...formData, dateTo: e.target.value })}
+                        onFocus={openDatePicker} onClick={openDatePicker} onKeyDown={blockDateTyping}
+                        className="peer absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                      />
+                      <div className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between peer-focus:ring-2 peer-focus:ring-[#FF7400]/50">
+                        <span className={formData.dateTo ? "text-slate-800 font-medium" : "text-slate-400"}>
+                          {formData.dateTo ? formatDDMMYYYY(formData.dateTo) : "DD/MM/YYYY"}
+                        </span>
+                        <Calendar size={18} className="text-slate-400" />
+                      </div>
+                    </div>
                   </div>
 
                   <div className="md:col-span-2">
                     <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Category</label>
                     <div className="flex flex-wrap gap-4">
-                      <label className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-slate-50 px-4 py-3 rounded-2xl border border-slate-200 cursor-pointer hover:bg-slate-100 hover:border-[#FF7400]/30 transition-all">
-                        <input 
-                          type="checkbox" 
-                          className="w-5 h-5 accent-[#FF7400]" 
-                          checked={Array.isArray(formData.category) && formData.category.length === AVAILABLE_CATEGORIES.length} 
+                      <label className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-100 hover:border-[#FF7400]/30 transition-all">
+                        <input
+                          type="checkbox"
+                          className="w-5 h-5 accent-[#FF7400]"
+                          checked={Array.isArray(formData.category) && formData.category.length === AVAILABLE_CATEGORIES.length}
                           onChange={(e) => {
                             if (e.target.checked) {
                               setFormData({ ...formData, category: [...AVAILABLE_CATEGORIES] });
@@ -1315,7 +1377,7 @@ export default function AdminTournamentsPage() {
                         All
                       </label>
                       {AVAILABLE_CATEGORIES.map((cat) => (
-                        <label key={cat} className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-slate-50 px-4 py-3 rounded-2xl border border-slate-200 cursor-pointer hover:bg-slate-100 hover:border-[#FF7400]/30 transition-all">
+                        <label key={cat} className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-100 hover:border-[#FF7400]/30 transition-all">
                           <input 
                             type="checkbox" 
                             className="w-5 h-5 accent-[#FF7400]" 
@@ -1340,7 +1402,7 @@ export default function AdminTournamentsPage() {
                     <input
                       required type="text" value={formData.location}
                       onChange={e => setFormData({ ...formData, location: e.target.value.replace(/[^a-zA-Z0-9\s,.'-]/g, '') })}
-                      className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50"
+                      className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50"
                     />
                   </div>
 
@@ -1350,7 +1412,7 @@ export default function AdminTournamentsPage() {
                       type="text" value={formData.beltEligibility}
                       onChange={e => setFormData({ ...formData, beltEligibility: e.target.value })}
                       placeholder="e.g. Yellow belt and above"
-                      className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50"
+                      className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50"
                     />
                   </div>
 
@@ -1359,7 +1421,7 @@ export default function AdminTournamentsPage() {
                     <input
                       required type="text" maxLength={5} value={formData.entryFee}
                       onChange={e => setFormData({ ...formData, entryFee: e.target.value.replace(/\D/g, '') })}
-                      className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50"
+                      className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50"
                     />
                   </div>
 
@@ -1385,7 +1447,7 @@ export default function AdminTournamentsPage() {
                     <textarea
                       required value={formData.description}
                       onChange={e => setFormData({ ...formData, description: e.target.value })}
-                      className="w-full h-24 px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 resize-none"
+                      className="w-full h-24 px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 resize-none"
                     />
                   </div>
                 </div>
@@ -1393,13 +1455,13 @@ export default function AdminTournamentsPage() {
                 <div className="flex gap-4 pt-2">
                   <button
                     type="button" onClick={() => setIsCreateOpen(false)}
-                    className="flex-1 py-5 bg-slate-100 text-slate-600 font-bold rounded-2xl hover:bg-slate-200 transition-all"
+                    className="flex-1 py-4 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-all"
                   >
                     Discard
                   </button>
                   <button
                     type="submit" disabled={submitLoading}
-                    className="flex-1 py-5 bg-[#FF7400] text-white font-bold rounded-2xl shadow-xl shadow-[#FF7400]/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 flex items-center justify-center gap-2 transition-all"
+                    className="flex-1 py-4 bg-[#FF7400] text-white font-bold rounded-xl shadow-xl shadow-[#FF7400]/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 flex items-center justify-center gap-2 transition-all"
                   >
                     {submitLoading
                       ? <Loader2 size={20} className="animate-spin" />
@@ -1420,7 +1482,7 @@ export default function AdminTournamentsPage() {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="w-full max-w-2xl bg-white rounded-[2.5rem] p-10 shadow-2xl overflow-y-auto max-h-[90vh]"
+              className="w-full max-w-2xl lg:max-w-4xl bg-white rounded-[1.75rem] p-10 shadow-2xl overflow-y-auto max-h-[90vh]"
             >
               <div className="flex justify-between items-start mb-6">
                 <div>
@@ -1446,7 +1508,7 @@ export default function AdminTournamentsPage() {
                       required type="text" value={editFormData.title}
                       onChange={e => setEditFormData({ ...editFormData, title: e.target.value })}
                       placeholder="e.g. District Championship 2026"
-                      className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50"
+                      className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50"
                     />
                   </div>
 
@@ -1455,7 +1517,7 @@ export default function AdminTournamentsPage() {
                     <select
                       value={editFormData.level}
                       onChange={e => setEditFormData({ ...editFormData, level: e.target.value, zoneId: "", districtId: "", clubId: "" })}
-                      className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 font-semibold text-slate-900"
+                      className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 font-semibold text-slate-900"
                     >
                       <option value="CLUB">Club</option>
                       <option value="DISTRICT">District</option>
@@ -1472,7 +1534,7 @@ export default function AdminTournamentsPage() {
                         required
                         value={editFormData.zoneId || ""}
                         onChange={e => setEditFormData({ ...editFormData, zoneId: e.target.value })}
-                        className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 font-semibold text-slate-900"
+                        className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 font-semibold text-slate-900"
                       >
                         <option value="" disabled>Select a Zone</option>
                         {zones.map((zone) => (
@@ -1489,7 +1551,7 @@ export default function AdminTournamentsPage() {
                         required
                         value={editFormData.districtId || ""}
                         onChange={e => setEditFormData({ ...editFormData, districtId: e.target.value })}
-                        className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 font-semibold text-slate-900"
+                        className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 font-semibold text-slate-900"
                       >
                         <option value="" disabled>Select a District</option>
                         {districts.map((d) => (
@@ -1506,7 +1568,7 @@ export default function AdminTournamentsPage() {
                         <select
                           value={editFormData.districtId || ""}
                           onChange={e => setEditFormData({ ...editFormData, districtId: e.target.value, clubId: "" })}
-                          className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 font-semibold text-slate-900"
+                          className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 font-semibold text-slate-900"
                         >
                           <option value="">Select a District</option>
                           {districts.map((d) => (
@@ -1520,7 +1582,7 @@ export default function AdminTournamentsPage() {
                           required
                           value={editFormData.clubId || ""}
                           onChange={e => setEditFormData({ ...editFormData, clubId: e.target.value })}
-                          className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 font-semibold text-slate-900"
+                          className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 font-semibold text-slate-900"
                         >
                           <option value="" disabled>Select a Club</option>
                           {clubs
@@ -1535,39 +1597,60 @@ export default function AdminTournamentsPage() {
 
                   <div>
                     <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Gender</label>
-                    <select
-                      value={editFormData.gender}
-                      onChange={e => setEditFormData({ ...editFormData, gender: e.target.value })}
-                      className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 font-semibold"
-                    >
-                      <option value="BOTH">Both</option>
-                      <option value="MALE">Male Only</option>
-                      <option value="FEMALE">Female Only</option>
-                    </select>
+                    <div className="relative">
+                      <GenderIcon gender={editFormData.gender} size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                      <select
+                        value={editFormData.gender}
+                        onChange={e => setEditFormData({ ...editFormData, gender: e.target.value })}
+                        className="w-full pl-11 pr-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 font-semibold"
+                      >
+                        <option value="BOTH">Both</option>
+                        <option value="MALE">Male Only</option>
+                        <option value="FEMALE">Female Only</option>
+                      </select>
+                    </div>
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Start Date *</label>
-                    <input
-                      required type="date" lang="en-GB" value={editFormData.dateFrom}
-                      onChange={e => setEditFormData({ ...editFormData, dateFrom: e.target.value })}
-                      className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50"
-                    />
+                    <div className="relative">
+                      <input
+                        required type="date" value={editFormData.dateFrom}
+                        onChange={e => setEditFormData({ ...editFormData, dateFrom: e.target.value })}
+                        onFocus={openDatePicker} onClick={openDatePicker} onKeyDown={blockDateTyping}
+                        className="peer absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                      />
+                      <div className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between peer-focus:ring-2 peer-focus:ring-[#FF7400]/50">
+                        <span className={editFormData.dateFrom ? "text-slate-800 font-medium" : "text-slate-400"}>
+                          {editFormData.dateFrom ? formatDDMMYYYY(editFormData.dateFrom) : "DD/MM/YYYY"}
+                        </span>
+                        <Calendar size={18} className="text-slate-400" />
+                      </div>
+                    </div>
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">End Date (optional)</label>
-                    <input
-                      type="date" lang="en-GB" min={editFormData.dateFrom} value={editFormData.dateTo}
-                      onChange={e => setEditFormData({ ...editFormData, dateTo: e.target.value })}
-                      className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50"
-                    />
+                    <div className="relative">
+                      <input
+                        type="date" min={editFormData.dateFrom} value={editFormData.dateTo}
+                        onChange={e => setEditFormData({ ...editFormData, dateTo: e.target.value })}
+                        onFocus={openDatePicker} onClick={openDatePicker} onKeyDown={blockDateTyping}
+                        className="peer absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                      />
+                      <div className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between peer-focus:ring-2 peer-focus:ring-[#FF7400]/50">
+                        <span className={editFormData.dateTo ? "text-slate-800 font-medium" : "text-slate-400"}>
+                          {editFormData.dateTo ? formatDDMMYYYY(editFormData.dateTo) : "DD/MM/YYYY"}
+                        </span>
+                        <Calendar size={18} className="text-slate-400" />
+                      </div>
+                    </div>
                   </div>
 
                   <div className="md:col-span-2">
                     <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Category</label>
                     <div className="flex flex-wrap gap-4">
-                      <label className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-slate-50 px-4 py-3 rounded-2xl border border-slate-200 cursor-pointer hover:bg-slate-100 hover:border-[#FF7400]/30 transition-all">
+                      <label className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-100 hover:border-[#FF7400]/30 transition-all">
                         <input
                           type="checkbox"
                           className="w-5 h-5 accent-[#FF7400]"
@@ -1583,7 +1666,7 @@ export default function AdminTournamentsPage() {
                         All
                       </label>
                       {AVAILABLE_CATEGORIES.map((cat) => (
-                        <label key={cat} className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-slate-50 px-4 py-3 rounded-2xl border border-slate-200 cursor-pointer hover:bg-slate-100 hover:border-[#FF7400]/30 transition-all">
+                        <label key={cat} className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-100 hover:border-[#FF7400]/30 transition-all">
                           <input
                             type="checkbox"
                             className="w-5 h-5 accent-[#FF7400]"
@@ -1608,7 +1691,7 @@ export default function AdminTournamentsPage() {
                     <input
                       required type="text" value={editFormData.location}
                       onChange={e => setEditFormData({ ...editFormData, location: e.target.value.replace(/[^a-zA-Z0-9\s,.'-]/g, '') })}
-                      className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50"
+                      className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50"
                     />
                   </div>
 
@@ -1618,7 +1701,7 @@ export default function AdminTournamentsPage() {
                       type="text" value={editFormData.beltEligibility}
                       onChange={e => setEditFormData({ ...editFormData, beltEligibility: e.target.value })}
                       placeholder="e.g. Yellow belt and above"
-                      className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50"
+                      className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50"
                     />
                   </div>
 
@@ -1627,7 +1710,7 @@ export default function AdminTournamentsPage() {
                     <input
                       required type="text" maxLength={5} value={editFormData.entryFee}
                       onChange={e => setEditFormData({ ...editFormData, entryFee: e.target.value.replace(/\D/g, '') })}
-                      className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50"
+                      className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50"
                     />
                   </div>
 
@@ -1653,13 +1736,13 @@ export default function AdminTournamentsPage() {
                 <div className="flex gap-4 pt-2">
                   <button
                     type="button" onClick={() => setEditingTournament(null)}
-                    className="flex-1 py-5 bg-slate-100 text-slate-600 font-bold rounded-2xl hover:bg-slate-200 transition-all"
+                    className="flex-1 py-4 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-all"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit" disabled={editLoading}
-                    className="flex-1 py-5 bg-[#FF7400] text-white font-bold rounded-2xl shadow-xl shadow-[#FF7400]/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 flex items-center justify-center gap-2 transition-all"
+                    className="flex-1 py-4 bg-[#FF7400] text-white font-bold rounded-xl shadow-xl shadow-[#FF7400]/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 flex items-center justify-center gap-2 transition-all"
                   >
                     {editLoading
                       ? <Loader2 size={20} className="animate-spin" />

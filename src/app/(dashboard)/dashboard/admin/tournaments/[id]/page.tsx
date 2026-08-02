@@ -15,12 +15,12 @@ import {
 import type { BracketMatch, BracketSlot, DrawCategory, RegisteredPlayer, Seeds, Tab, Tournament, ViewMode } from "./types";
 import {
   categoryKey, clubSeparatedShuffle, findNextMatch, generateIJFBracket, generateRoundRobin,
-  isDrawRoundRobin, processByeMatches, backfillBronzeMatches, roundName, shuffleArray,
+  isDrawRoundRobin, processByeMatches, backfillBronzeMatches, getRoundLabel, shuffleArray,
 } from "./lib/bracketEngine";
-import { exportAllMatchesToPDF, exportMatchToPDF, exportOverallTournamentReport, printRegistrationSlip } from "./lib/pdfExport";
+import { exportAllMatchesToPDF, exportMatchToPDF, exportOverallTournamentReport, printRegistrationSlip, exportCategoryReport, exportCategoryChartPDF } from "./lib/pdfExport";
 import { getRoundsStats } from "./lib/matchStats";
 import { ExpiredBlock } from "./components/ExpiredBlock";
-import { BracketView } from "./components/BracketView";
+import { BracketView, RoundRobinLeaderboard } from "./components/BracketView";
 import { ImportPlayersWizard } from "./components/ImportPlayersWizard";
 import { AddPlayerModal } from "./components/AddPlayerModal";
 import { DisqualifyTab } from "./components/DisqualifyTab";
@@ -701,6 +701,8 @@ export default function TournamentDetailPage() {
   const drawPlayers = eligiblePlayers;
 
   const currentDraw = draws[currentKey];
+  const isCurrentRoundRobin = !!currentDraw?.rounds[0]?.[0]?.matchId.startsWith("rr_");
+  const effectiveViewMode: ViewMode = viewMode === "leaderboard" && !isCurrentRoundRobin ? "bracket" : viewMode;
 
   // ── Actions ─────────────────────────────────────────────────────────────────
   const handleAssignSeed = (seedNum: 1 | 2 | 3 | 4, player: RegisteredPlayer) => {
@@ -778,6 +780,13 @@ export default function TournamentDetailPage() {
       rounds = processByeMatches(rawRounds);
 
       if ((selectedMethod === "single-repechage" || selectedMethod === "double-repechage") && rounds.length >= 2) {
+        // generateIJFBracket always appends a generic "TBD vs TBD" consolation-bronze
+        // match to the final round for plain straight-elimination brackets. Repechage
+        // formats supply their own dedicated bronze round below, so drop that phantom
+        // match here — otherwise it's left stranded, unpopulated, forever.
+        const finalRoundIdx = rounds.length - 1;
+        rounds[finalRoundIdx] = rounds[finalRoundIdx].filter(m => !m.matchId.startsWith("M_BRONZE_"));
+
         const totalRounds = rounds.length;
 
         if (selectedMethod === "double-repechage") {
@@ -2308,9 +2317,12 @@ export default function TournamentDetailPage() {
                                 }}
                                 className="bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-black rounded-lg px-2 py-1 outline-none hover:bg-indigo-100 transition-colors cursor-pointer"
                               >
-                                {(tournamentMats.length > 0 ? tournamentMats.map(m => m.matNumber).sort((a, b) => a - b) : [1]).map(m => (
-                                  <option key={m} value={m}>MAT {m}</option>
-                                ))}
+                                {(tournamentMats.length > 0 ? tournamentMats.map(m => m.matNumber).sort((a, b) => a - b) : [1]).map(m => {
+                                  const coachName = tournamentMats.find(tm => tm.matNumber === m)?.refereeName;
+                                  return (
+                                    <option key={m} value={m}>MAT {m}{coachName ? ` — ${coachName}` : ""}</option>
+                                  );
+                                })}
                               </select>
                             </div>
                           </div>
@@ -2339,23 +2351,56 @@ export default function TournamentDetailPage() {
                           </div>
                         </div>
 
-                        {draw?.generated && (
+                        {draw?.generated && (() => {
+                          const isCatRoundRobin = !!draw.rounds[0]?.[0]?.matchId.startsWith("rr_");
+                          const catViewMode: ViewMode = categoryViewMode[key] || "bracket";
+                          const effectiveCatViewMode: ViewMode = catViewMode === "leaderboard" && !isCatRoundRobin ? "bracket" : catViewMode;
+                          return (
                           <div className="border-t border-slate-50">
                             <div className="flex items-center justify-between px-5 pt-4">
                               <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                                {(categoryViewMode[key] || "bracket") === "bracket" ? "Bracket" : "Match List"}
+                                {effectiveCatViewMode === "bracket" ? "Bracket" : effectiveCatViewMode === "list" ? "Match List" : "Leaderboard"}
                               </h4>
-                              <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
-                                {(["bracket", "list"] as ViewMode[]).map((v) => (
-                                  <button key={v} onClick={() => setCategoryViewMode(prev => ({ ...prev, [key]: v }))}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${(categoryViewMode[key] || "bracket") === v ? "bg-white text-[#FF7400] shadow-sm" : "text-slate-400"}`}>
-                                    {v === "bracket" ? <><Grid size={12} className="inline mr-1" />Bracket</> : <><List size={12} className="inline mr-1" />List</>}
-                                  </button>
-                                ))}
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => exportCategoryChartPDF(tournament, key, draw, catDrawPlayers)}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF7400] hover:bg-[#e66800] text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+                                  title="Download Official Visual Competition Bracket Chart (PDF)"
+                                >
+                                  <Download size={13} /> Download Chart (PDF)
+                                </button>
+                                <button
+                                  onClick={() => exportCategoryReport(tournament, key, draw, catDrawPlayers)}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-[#FF7400] border border-orange-200 rounded-xl text-xs font-bold transition-all shadow-sm"
+                                  title="Print Entire Match Result Report for this Category"
+                                >
+                                  <Printer size={13} /> Print Report
+                                </button>
+                                <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+                                  {(isCatRoundRobin ? (["bracket", "list", "leaderboard"] as ViewMode[]) : (["bracket", "list"] as ViewMode[])).map((v) => (
+                                    <button key={v} onClick={() => setCategoryViewMode(prev => ({ ...prev, [key]: v }))}
+                                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${effectiveCatViewMode === v ? "bg-white text-[#FF7400] shadow-sm" : "text-slate-400"}`}>
+                                      {v === "bracket" ? <><Grid size={12} className="inline mr-1" />Bracket</>
+                                        : v === "list" ? <><List size={12} className="inline mr-1" />List</>
+                                        : <><BarChart3 size={12} className="inline mr-1" />Leaderboard</>}
+                                    </button>
+                                  ))}
+                                </div>
                               </div>
                             </div>
 
-                            {(categoryViewMode[key] || "bracket") === "bracket" ? (
+                            {effectiveCatViewMode === "leaderboard" ? (
+                            /* Leaderboard View */
+                            <div className="p-5 pb-8 bg-slate-50/30">
+                              <RoundRobinLeaderboard
+                                rounds={draw.rounds}
+                                players={catDrawPlayers}
+                                tournament={tournament}
+                                currentKey={key}
+                                currentDraw={draw}
+                              />
+                            </div>
+                            ) : effectiveCatViewMode === "bracket" ? (
                             /* Bracket View */
                             <div className="p-5 pb-8 bg-slate-50/30">
                               <BracketView
@@ -2370,11 +2415,23 @@ export default function TournamentDetailPage() {
                             ) : (
                             /* Match List View */
                             <div className="p-5 bg-white">
+                              <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-100">
+                                <span className="text-xs font-bold text-slate-500">
+                                  Total {draw.rounds.reduce((acc, r) => acc + r.length, 0)} Matches across {draw.rounds.length} Rounds
+                                </span>
+                                <button
+                                  onClick={() => exportCategoryReport(tournament, key, draw, catDrawPlayers)}
+                                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#FF7400] hover:bg-[#e66800] text-white rounded-xl text-xs font-black transition-all shadow-sm"
+                                  title="Print Entire Match Results Report"
+                                >
+                                  <Printer size={13} /> Print Entire Match Results
+                                </button>
+                              </div>
                               <div className="divide-y divide-slate-50">
                                 {draw.rounds.map((round, ri) => (
                                   <div key={ri} className="py-3">
                                     <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">
-                                      {roundName(ri, draw.rounds.length, catDrawPlayers.length <= 5)}
+                                      {getRoundLabel(draw.rounds, ri, catDrawPlayers.length <= 5)}
                                     </h5>
                                     <div className="space-y-2">
                                       {round.map((match, mi) => {
@@ -2422,7 +2479,8 @@ export default function TournamentDetailPage() {
                             </div>
                             )}
                           </div>
-                        )}
+                          );
+                        })()}
                       </div>
                     );
                   });
@@ -2537,9 +2595,12 @@ export default function TournamentDetailPage() {
                               }}
                               className="pl-4 pr-10 py-2.5 text-sm font-black bg-indigo-50 border-2 border-indigo-200 text-indigo-700 rounded-xl outline-none focus:border-indigo-400 hover:bg-indigo-100 transition-colors cursor-pointer appearance-none shadow-sm"
                             >
-                              {(tournamentMats.length > 0 ? tournamentMats.map(m => m.matNumber).sort((a, b) => a - b) : [1]).map(m => (
-                                <option key={m} value={m}>MAT {m}</option>
-                              ))}
+                              {(tournamentMats.length > 0 ? tournamentMats.map(m => m.matNumber).sort((a, b) => a - b) : [1]).map(m => {
+                                const coachName = tournamentMats.find(tm => tm.matNumber === m)?.refereeName;
+                                return (
+                                  <option key={m} value={m}>MAT {m}{coachName ? ` — ${coachName}` : ""}</option>
+                                );
+                              })}
                             </select>
                             <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500 pointer-events-none" />
                           </div>
@@ -2653,23 +2714,75 @@ export default function TournamentDetailPage() {
                       }`}>
                       ↺ Re-draw
                     </button>
+                    <button
+                      onClick={() => exportCategoryChartPDF(tournament, currentKey, currentDraw, filteredPlayers)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF7400] hover:bg-[#e66800] text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+                      title="Download Official Visual Competition Bracket Chart (PDF)"
+                    >
+                      <Download size={13} /> Download Chart (PDF)
+                    </button>
+                    <button
+                      onClick={() => exportCategoryReport(tournament, currentKey, currentDraw, filteredPlayers)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-[#FF7400] border border-orange-200 rounded-xl text-xs font-bold transition-all shadow-sm"
+                      title="Print Entire Match Result Report for this Category"
+                    >
+                      <Printer size={13} /> Print Report
+                    </button>
                     <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
-                      {(["bracket", "list"] as ViewMode[]).map((v) => (
+                      {(
+                        isCurrentRoundRobin
+                          ? (["bracket", "list", "leaderboard"] as ViewMode[])
+                          : (["bracket", "list"] as ViewMode[])
+                      ).map((v) => (
                         <button key={v} onClick={() => setViewMode(v)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === v ? "bg-white text-[#FF7400] shadow-sm" : "text-slate-400"}`}>
-                          {v === "bracket" ? <><Grid size={12} className="inline mr-1" />Bracket</> : <><List size={12} className="inline mr-1" />List</>}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${effectiveViewMode === v ? "bg-white text-[#FF7400] shadow-sm" : "text-slate-400"}`}>
+                          {v === "bracket" ? <><Grid size={12} className="inline mr-1" />Bracket</>
+                            : v === "list" ? <><List size={12} className="inline mr-1" />List</>
+                            : <><BarChart3 size={12} className="inline mr-1" />Leaderboard</>}
                         </button>
                       ))}
                     </div>
                   </div>
                 </div>
 
-                {viewMode === "list" ? (
-                  <div className="divide-y divide-slate-50">
+                {effectiveViewMode === "leaderboard" ? (
+                  <div className="p-5 pb-8 bg-slate-50/50">
+                    <RoundRobinLeaderboard
+                      rounds={currentDraw.rounds}
+                      players={filteredPlayers}
+                      tournament={tournament}
+                      currentKey={currentKey}
+                      currentDraw={currentDraw}
+                    />
+                  </div>
+                ) : effectiveViewMode === "list" ? (
+                  <div className="p-5">
+                    <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-100">
+                      <span className="text-xs font-bold text-slate-500">
+                        Total {currentDraw.rounds.reduce((acc, r) => acc + r.length, 0)} Matches across {currentDraw.rounds.length} Rounds
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => exportCategoryChartPDF(tournament, currentKey, currentDraw, filteredPlayers)}
+                          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#FF7400] hover:bg-[#e66800] text-white rounded-xl text-xs font-black transition-all shadow-sm"
+                          title="Download Official Visual Competition Bracket Chart as PDF"
+                        >
+                          <Download size={13} /> Download Chart (PDF)
+                        </button>
+                        <button
+                          onClick={() => exportCategoryReport(tournament, currentKey, currentDraw, filteredPlayers)}
+                          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-black transition-all shadow-sm"
+                          title="Print Entire Match Results Report"
+                        >
+                          <Printer size={13} /> Print Entire Match Results
+                        </button>
+                      </div>
+                    </div>
+                    <div className="divide-y divide-slate-50">
                     {currentDraw.rounds.map((round, ri) => (
                       <div key={ri} className="p-5">
                         <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-3">
-                          {roundName(ri, currentDraw.rounds.length, filteredPlayers.length <= 5)}
+                          {getRoundLabel(currentDraw.rounds, ri, filteredPlayers.length <= 5)}
                         </h4>
                         <div className="space-y-2">
                           {round.map((match, mi) => {
@@ -2725,6 +2838,7 @@ export default function TournamentDetailPage() {
                         </div>
                       </div>
                     ))}
+                    </div>
                   </div>
                 ) : (
                   <div className="p-5 pb-8 bg-slate-50/50">
@@ -2831,10 +2945,27 @@ export default function TournamentDetailPage() {
               return (
               <div key={key} className="space-y-4">
                 {isMultiCategory && (
-                  <h3 className="font-black text-slate-800 flex items-center gap-2 px-1">
-                    <Trophy size={16} className="text-[#FF7400]" />
-                    {ageGroup} · {gender === "FEMALE" ? "Girls" : "Boys"} · {weightLabel}{weightLabel && !weightLabel.includes("kg") ? " kg" : ""}
-                  </h3>
+                  <div className="flex items-center justify-between px-1">
+                    <h3 className="font-black text-slate-800 flex items-center gap-2">
+                      <Trophy size={16} className="text-[#FF7400]" />
+                      {ageGroup} · {gender === "FEMALE" ? "Girls" : "Boys"} · {weightLabel}{weightLabel && !weightLabel.includes("kg") ? " kg" : ""}
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => exportCategoryChartPDF(tournament, key, draw, eligiblePlayers)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF7400] hover:bg-[#e66800] text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+                        title="Download Official Visual Competition Bracket Chart as PDF"
+                      >
+                        <Download size={13} /> Download Chart (PDF)
+                      </button>
+                      <button
+                        onClick={() => exportCategoryReport(tournament, key, draw, eligiblePlayers)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all border border-slate-200"
+                      >
+                        <Printer size={13} className="text-[#FF7400]" /> Print Category Report
+                      </button>
+                    </div>
+                  </div>
                 )}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {tiles.map((t) => (
@@ -2867,7 +2998,7 @@ export default function TournamentDetailPage() {
                           <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center backdrop-blur-sm">
                             <Swords size={18} className="text-white/80" />
                           </div>
-                          <h3 className="font-black text-lg tracking-tight">{roundName(ri, draw.rounds.length, smallBracket)}</h3>
+                          <h3 className="font-black text-lg tracking-tight">{getRoundLabel(draw.rounds, ri, smallBracket)}</h3>
                         </div>
                         <span className="text-xs font-bold text-slate-300 bg-white/10 px-3 py-1.5 rounded-lg backdrop-blur-sm">{round.length} match{round.length !== 1 ? "es" : ""}</span>
                       </div>
@@ -3301,7 +3432,7 @@ export default function TournamentDetailPage() {
                         className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden"
                       >
                         <div className="px-6 py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white flex items-center justify-between">
-                          <h3 className="font-black">{roundName(ri, draw.rounds.length, smallBracket)} Results</h3>
+                          <h3 className="font-black">{getRoundLabel(draw.rounds, ri, smallBracket)} Results</h3>
                           <span className="text-xs font-bold text-emerald-100">{completedMatches.length} completed</span>
                         </div>
 
@@ -3380,7 +3511,7 @@ export default function TournamentDetailPage() {
                                     <div className="grid grid-cols-2 gap-3 text-sm">
                                       <div>
                                         <p className="text-[10px] text-blue-600 font-bold uppercase">Round</p>
-                                        <p className="font-black text-blue-700">{roundName(nextMatchInfo.roundIndex, draw.rounds.length)}</p>
+                                        <p className="font-black text-blue-700">{getRoundLabel(draw.rounds, nextMatchInfo.roundIndex)}</p>
                                       </div>
                                       <div>
                                         <p className="text-[10px] text-blue-600 font-bold uppercase">Match #{nextMatchInfo.matchNumber}</p>

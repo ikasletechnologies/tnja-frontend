@@ -320,6 +320,46 @@ export function roundName(ri: number, total: number, isRoundRobin = false): stri
   return `Round ${ri + 1}`;
 }
 
+// Single/double-repechage formats append 2 extra rounds (a repechage round, then a
+// bronze round) after the main elimination bracket. Those trailing rounds don't follow
+// the main bracket's power-of-2 halving pattern, so callers need to treat them separately
+// for both round-name labeling and vertical layout.
+export function hasRepechageRounds(rounds: BracketMatch[][]): boolean {
+  return rounds.some(r => r.some(m => m.matchId.startsWith("rr_rep") || m.matchId.startsWith("rr_bronze")));
+}
+
+export function mainBracketRoundCount(rounds: BracketMatch[][]): number {
+  return hasRepechageRounds(rounds) ? rounds.length - 2 : rounds.length;
+}
+
+export function getEliminationFormatLabel(rounds: BracketMatch[][]): string {
+  if (!rounds || !hasRepechageRounds(rounds)) {
+    return "Straight Elimination";
+  }
+  const mainCount = mainBracketRoundCount(rounds);
+  const repRound = rounds[mainCount];
+  if (repRound) {
+    if (repRound.length === 1 || repRound.some(m => m.slotA?.playerName?.includes("Finalist") || m.slotB?.playerName?.includes("Finalist"))) {
+      return "Single Repechage";
+    }
+    if (repRound.length >= 2 || repRound.some(m => m.slotA?.playerName?.includes("QF") || m.slotB?.playerName?.includes("QF"))) {
+      return "Double Repechage";
+    }
+  }
+  return "Repechage";
+}
+
+
+// Repechage-aware replacement for roundName: labels the main bracket rounds normally
+// (Quarter-Final/Semi-Final/Final relative to the true main-bracket size, not inflated
+// by the trailing repechage/bronze rounds), then labels the two trailing rounds explicitly.
+export function getRoundLabel(rounds: BracketMatch[][], ri: number, isRoundRobin = false): string {
+  if (isRoundRobin) return `Round ${ri + 1}`;
+  const mainCount = mainBracketRoundCount(rounds);
+  if (ri < mainCount) return roundName(ri, mainCount, false);
+  return ri === mainCount ? "Repechage" : "🥉 Bronze Medal";
+}
+
 export function findNextMatch(rounds: BracketMatch[][], currentRoundIndex: number, matchIndex: number, winner: BracketSlot) {
   if (currentRoundIndex >= rounds.length - 1) return null;
 
