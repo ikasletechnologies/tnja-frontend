@@ -204,6 +204,50 @@ export function generateRoundRobin(players: RegisteredPlayer[]): BracketMatch[][
   return rounds;
 }
 
+// ─── IJF BYE Distribution Order ───────────────────────────────────────────────
+// Standard IJF BYE allocation order:
+// For odd BYE count B, (B+1)/2 BYEs go to the lower half and (B-1)/2 BYEs go to the upper half.
+// For even BYE count B, B/2 BYEs go to each half.
+// Priority order:
+// 1. lower half - last lower
+// 2. upper half - first upper
+// 3. lower half - first upper
+// 4. upper half - last lower
+// 5. lower half - second last lower
+// 6. upper half - second upper
+// 7. lower half - second upper
+// 8. upper half - second last lower
+export function getByeMatchOrder(M: number): number[] {
+  const order: number[] = [];
+  const added = new Set<number>();
+
+  const add = (idx: number) => {
+    if (idx >= 0 && idx < M && !added.has(idx)) {
+      order.push(idx);
+      added.add(idx);
+    }
+  };
+
+  const half = Math.floor(M / 2);
+  const steps = Math.max(1, half);
+  for (let k = 0; k < steps; k++) {
+    // 1. lower half - last lower
+    add(M - 1 - k);
+    // 2. upper half - first upper
+    add(k);
+    // 3. lower half - first upper
+    add(half + k);
+    // 4. upper half - last lower
+    add(half - 1 - k);
+  }
+
+  for (let i = 0; i < M; i++) {
+    add(i);
+  }
+
+  return order;
+}
+
 // ─── IJF Bracket Generator ────────────────────────────────────────────────────
 export function generateIJFBracket(players: RegisteredPlayer[], seeds: Seeds, shuffleMethod: "random" | "club-separated" = "club-separated"): BracketMatch[][] {
   const N = nextPow2(Math.max(players.length, 2));
@@ -211,11 +255,15 @@ export function generateIJFBracket(players: RegisteredPlayer[], seeds: Seeds, sh
   const B = N - players.length; // Number of BYEs
   const slots: (RegisteredPlayer | null | "BYE")[] = new Array(N).fill(null);
 
-  // IJF seed positions: S1=top, S2=bottom, S3=2nd quarter, S4=3rd quarter
-  if (seeds[1]) slots[0] = { ...seeds[1], seedNumber: 1 };
-  if (seeds[2]) slots[N - 1] = { ...seeds[2], seedNumber: 2 };
-  if (seeds[3]) slots[Math.floor(N / 4)] = { ...seeds[3], seedNumber: 3 };
-  if (seeds[4]) slots[Math.floor((3 * N) / 4)] = { ...seeds[4], seedNumber: 4 };
+  // Seeding positions based on previous tournament ranking:
+  // 1st place (Seed 1) -> second half (bottom, N - 1)
+  // 2nd place (Seed 2) -> first half (top, 0)
+  // 3rd place (Seed 3) -> second half (3rd quarter, floor((3 * N) / 4))
+  // 4th place (Seed 4) -> first half (2nd quarter, floor(N / 4))
+  if (seeds[1]) slots[N - 1] = { ...seeds[1], seedNumber: 1 };
+  if (seeds[2]) slots[0] = { ...seeds[2], seedNumber: 2 };
+  if (seeds[3]) slots[Math.floor((3 * N) / 4)] = { ...seeds[3], seedNumber: 3 };
+  if (seeds[4]) slots[Math.floor(N / 4)] = { ...seeds[4], seedNumber: 4 };
 
   const seededIds = new Set(
     [seeds[1], seeds[2], seeds[3], seeds[4]].filter(Boolean).map((p) => p!.id)
@@ -224,26 +272,15 @@ export function generateIJFBracket(players: RegisteredPlayer[], seeds: Seeds, sh
     ? clubSeparatedShuffle(players.filter((p) => !seededIds.has(p.id)))
     : shuffleArray(players.filter((p) => !seededIds.has(p.id)));
 
-  // Determine which matches get a BYE to distribute them evenly and avoid BYE vs BYE
+  // Determine which matches get a BYE following standard IJF distribution order
   const byeMatches = new Set<number>();
   if (B > 0) {
-    if (B >= 1) byeMatches.add(0);
-    if (B >= 2) byeMatches.add(M - 1);
-    if (B >= 3) byeMatches.add(Math.floor(M / 4));
-    if (B >= 4) byeMatches.add(Math.floor((3 * M) / 4));
-    
-    let remaining = B - byeMatches.size;
-    if (remaining > 0) {
-      const available: number[] = [];
-      for (let i = 0; i < M; i++) {
-        if (!byeMatches.has(i)) available.push(i);
-      }
-      for (let i = 0; i < remaining; i++) {
-        const idx = Math.floor((i * available.length) / remaining);
-        byeMatches.add(available[idx]);
-      }
+    const byeOrder = getByeMatchOrder(M);
+    for (let i = 0; i < Math.min(B, byeOrder.length); i++) {
+      byeMatches.add(byeOrder[i]);
     }
   }
+
 
   // Assign BYEs to the slots of those matches
   for (const matchIdx of byeMatches) {
