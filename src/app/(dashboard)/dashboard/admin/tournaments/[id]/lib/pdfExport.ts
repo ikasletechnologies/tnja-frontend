@@ -4,6 +4,189 @@
 import type { BracketMatch, BracketSlot, DrawCategory, RegisteredPlayer, Tournament } from "../types";
 import { isDrawRoundRobin, roundName, getRoundLabel, mainBracketRoundCount, getEliminationFormatLabel } from "./bracketEngine";
 
+// ─── Classic "official draw sheet" bracket renderer ───────────────────────────
+// Renders a traditional box-and-connector-line bracket (IJF paper-sheet style):
+// two stacked boxes per match joined by a right-angle line into the next round,
+// blank boxes for BYE/TBD slots, and the recorded winner's name written on the
+// connector line once a match is decided (mirrors the hand-written paper form).
+
+const BX_ROW = 40;
+const BX_BOX_W = 195;
+const BX_BOX_H = 30;
+const BX_COL_GAP = 80;
+const BX_COL_W = BX_BOX_W + BX_COL_GAP;
+
+function bxLine(x1: number, y1: number, x2: number, y2: number): string {
+  return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="bx-line" />`;
+}
+
+function bxBox(slot: BracketSlot, x: number, y: number): string {
+  const blank = slot.isBye || slot.playerName === "TBD";
+  return `
+    <div class="bx-box" style="left:${x}px; top:${y}px; width:${BX_BOX_W}px; height:${BX_BOX_H}px;">
+      ${blank ? "" : `
+        ${slot.seedNumber ? `<span class="bx-seed">${slot.seedNumber}</span>` : ""}
+        <span class="bx-name-wrap">
+          <span class="bx-name">${slot.playerName}</span>
+          ${slot.club ? `<span class="bx-club">${slot.club}</span>` : ""}
+        </span>
+      `}
+    </div>`;
+}
+
+// Main championship bracket: standard binary merge, round r's match i is fed by
+// round r-1's matches 2i and 2i+1, laid out recursively so every round's boxes
+// sit at the vertical midpoint of the two matches feeding them.
+function renderMainBracketTree(mainRounds: BracketMatch[][]): { html: string; width: number; height: number; matchCount: number } {
+  if (!mainRounds.length) return { html: "", width: 0, height: 0, matchCount: 0 };
+  const POS_GUTTER = 30;
+  const numRounds = mainRounds.length;
+
+  const centers: number[][] = [];
+  centers[0] = mainRounds[0].map((_, i) => i * 2 * BX_ROW + BX_ROW);
+  for (let r = 1; r < numRounds; r++) {
+    centers[r] = mainRounds[r].map((_, i) => (centers[r - 1][2 * i] + centers[r - 1][2 * i + 1]) / 2);
+  }
+  const slotY = (r: number, i: number, which: 0 | 1): number =>
+    r === 0 ? (2 * i + which) * BX_ROW : centers[r - 1][2 * i + which];
+
+  const totalHeight = mainRounds[0].length * 2 * BX_ROW + BX_BOX_H;
+  const totalWidth = POS_GUTTER + numRounds * BX_COL_W + BX_BOX_W + 90;
+
+  let lines = "";
+  let boxes = "";
+  let posCounter = 1;
+  let matchCounter = 1;
+
+  mainRounds.forEach((roundMatches, r) => {
+    const colX = POS_GUTTER + r * BX_COL_W;
+    const isFinal = r === numRounds - 1;
+
+    roundMatches.forEach((m, i) => {
+      const yA = slotY(r, i, 0);
+      const yB = slotY(r, i, 1);
+      boxes += bxBox(m.slotA, colX, yA);
+      boxes += bxBox(m.slotB, colX, yB);
+
+      if (r === 0) {
+        const blankA = m.slotA.isBye || m.slotA.playerName === "TBD";
+        const blankB = m.slotB.isBye || m.slotB.playerName === "TBD";
+        boxes += `<div class="bx-pos" style="left:0px; top:${yA}px; width:${POS_GUTTER - 4}px; height:${BX_BOX_H}px;">${blankA ? "" : posCounter}</div>`;
+        posCounter++;
+        boxes += `<div class="bx-pos" style="left:0px; top:${yB}px; width:${POS_GUTTER - 4}px; height:${BX_BOX_H}px;">${blankB ? "" : posCounter}</div>`;
+        posCounter++;
+      }
+
+      const midX = colX + BX_BOX_W + BX_COL_GAP / 2;
+      lines += bxLine(colX + BX_BOX_W, yA + BX_BOX_H / 2, midX, yA + BX_BOX_H / 2);
+      lines += bxLine(colX + BX_BOX_W, yB + BX_BOX_H / 2, midX, yB + BX_BOX_H / 2);
+      lines += bxLine(midX, yA + BX_BOX_H / 2, midX, yB + BX_BOX_H / 2);
+
+      const cy = centers[r][i] + BX_BOX_H / 2;
+      if (!isFinal) {
+        lines += bxLine(midX, cy, colX + BX_COL_W, cy);
+        const decided = m.status === "COMPLETED" && !!m.winnerId;
+        const winnerName = decided ? (m.winnerId === m.slotA.playerId ? m.slotA.playerName : m.slotB.playerName) : "";
+        boxes += `<div class="bx-num" style="left:${colX + BX_BOX_W + 2}px; top:${cy - 18}px;">${matchCounter}</div>`;
+        if (winnerName) {
+          boxes += `<div class="bx-winline" style="left:${colX + BX_BOX_W + 2}px; top:${cy - 8}px; width:${BX_COL_GAP - 6}px;">${winnerName}</div>`;
+        }
+        matchCounter++;
+      } else {
+        boxes += `<div class="bx-final-tag" style="left:${colX + BX_BOX_W + 14}px; top:${cy - 34}px;">FINAL</div>`;
+        boxes += `<div class="bx-place" style="left:${colX + BX_BOX_W + 14}px; top:${cy - 4}px;">1.</div>`;
+        boxes += `<div class="bx-place" style="left:${colX + BX_BOX_W + 14}px; top:${cy + 18}px;">2.</div>`;
+      }
+    });
+  });
+
+  return {
+    html: `<div class="bracket-canvas" style="width:${totalWidth}px; height:${totalHeight}px;"><svg width="${totalWidth}" height="${totalHeight}" class="bx-svg">${lines}</svg>${boxes}</div>`,
+    width: totalWidth,
+    height: totalHeight,
+    matchCount: matchCounter - 1,
+  };
+}
+
+// Repechage/bronze rounds don't halve like the main bracket — each round keeps
+// the same match count, with round r+1's match i fed 1:1 by round r's match i
+// (the other slot is either a fixed "Loser of ..." label or filled in later by
+// the app's progression logic), so each column is laid out independently.
+function renderRepechageBracket(repRounds: BracketMatch[][], numberStart: number): { html: string; width: number; height: number } {
+  if (!repRounds.length) return { html: "", width: 0, height: 0 };
+
+  const matchesPerCol = repRounds[0].length;
+  const totalHeight = matchesPerCol * 2 * BX_ROW + BX_BOX_H;
+  const totalWidth = repRounds.length * BX_COL_W + BX_BOX_W + 90;
+
+  let lines = "";
+  let boxes = "";
+  let counter = numberStart;
+
+  repRounds.forEach((roundMatches, r) => {
+    const colX = r * BX_COL_W;
+    const isLast = r === repRounds.length - 1;
+
+    roundMatches.forEach((m, i) => {
+      const yA = i * 2 * BX_ROW;
+      const yB = i * 2 * BX_ROW + BX_ROW;
+      boxes += bxBox(m.slotA, colX, yA);
+      boxes += bxBox(m.slotB, colX, yB);
+
+      const midX = colX + BX_BOX_W + BX_COL_GAP / 2;
+      lines += bxLine(colX + BX_BOX_W, yA + BX_BOX_H / 2, midX, yA + BX_BOX_H / 2);
+      lines += bxLine(colX + BX_BOX_W, yB + BX_BOX_H / 2, midX, yB + BX_BOX_H / 2);
+      lines += bxLine(midX, yA + BX_BOX_H / 2, midX, yB + BX_BOX_H / 2);
+
+      const cy = (yA + yB) / 2 + BX_BOX_H / 2;
+      if (!isLast) {
+        lines += bxLine(midX, cy, colX + BX_COL_W, cy);
+        const decided = m.status === "COMPLETED" && !!m.winnerId;
+        const winnerName = decided ? (m.winnerId === m.slotA.playerId ? m.slotA.playerName : m.slotB.playerName) : "";
+        boxes += `<div class="bx-num" style="left:${colX + BX_BOX_W + 2}px; top:${cy - 18}px;">${counter}</div>`;
+        if (winnerName) {
+          boxes += `<div class="bx-winline" style="left:${colX + BX_BOX_W + 2}px; top:${cy - 8}px; width:${BX_COL_GAP - 6}px;">${winnerName}</div>`;
+        }
+        counter++;
+      } else {
+        boxes += `<div class="bx-final-tag" style="left:${colX + BX_BOX_W + 14}px; top:${cy - 18}px;">3RD PLACE</div>`;
+      }
+    });
+  });
+
+  return {
+    html: `<div class="bracket-canvas" style="width:${totalWidth}px; height:${totalHeight}px;"><svg width="${totalWidth}" height="${totalHeight}" class="bx-svg">${lines}</svg>${boxes}</div>`,
+    width: totalWidth,
+    height: totalHeight,
+  };
+}
+
+const BX_STYLES = `
+  .bracket-canvas { position: relative; margin: 0 auto 20px auto; }
+  .bx-svg { position: absolute; top: 0; left: 0; overflow: visible; }
+  .bx-line { stroke: #0f172a; stroke-width: 1.5; }
+  .bx-box {
+    position: absolute;
+    border: 1.5px solid #0f172a;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 6px;
+    font-size: 10px;
+    overflow: hidden;
+  }
+  .bx-seed { flex-shrink: 0; background: #fef3c7; color: #b45309; font-weight: 900; font-size: 9px; padding: 1px 4px; border-radius: 3px; }
+  .bx-name-wrap { display: flex; flex-direction: column; justify-content: center; overflow: hidden; min-width: 0; line-height: 1.15; }
+  .bx-name { font-weight: 800; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bx-club { color: #64748b; font-size: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bx-pos { position: absolute; text-align: right; padding-right: 4px; font-size: 10px; font-weight: 900; color: #1d4ed8; display: flex; align-items: center; justify-content: flex-end; }
+  .bx-num { position: absolute; font-size: 9px; font-weight: 900; color: #475569; background: #fff; padding: 0 2px; }
+  .bx-winline { position: absolute; font-size: 10px; font-weight: 900; color: #15803d; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bx-final-tag { position: absolute; font-size: 12px; font-weight: 900; color: #0f172a; text-decoration: underline; }
+  .bx-place { position: absolute; font-size: 10px; font-weight: 800; color: #334155; }
+`;
+
 export function printRegistrationSlip(player: RegisteredPlayer, tournament: Tournament | null) {
   const html = `
     <!DOCTYPE html>
@@ -1519,67 +1702,12 @@ export function exportEliminationChartPDF(
     }
   });
 
-  const formatTime = (sec?: number) => {
-    if (!sec) return "";
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return m > 0 ? `${m}m ${s}s` : `${s}s`;
-  };
-
   const formattedDate = tournament?.date ? new Date(tournament.date).toLocaleDateString("en-IN") : new Date().toLocaleDateString("en-IN");
   const mainRounds = draw.rounds.slice(0, mainCount);
   const repechageRounds = draw.rounds.slice(mainCount);
 
-  const renderMatchCard = (m: any) => {
-    const isBye = m.slotA.isBye || m.slotB.isBye;
-    const clubA = activePlayers.find(p => p.id === m.slotA.playerId)?.club || "";
-    const clubB = activePlayers.find(p => p.id === m.slotB.playerId)?.club || "";
-    const winnerA = m.winnerId && m.winnerId === m.slotA.playerId;
-    const winnerB = m.winnerId && m.winnerId === m.slotB.playerId;
-
-    const scoreA_str = m.scoreA ? `${m.scoreA.ippon || 0}.${m.scoreA.wazaAri || 0}.${m.scoreA.yuko || 0}` : "0.0.0";
-    const scoreB_str = m.scoreB ? `${m.scoreB.ippon || 0}.${m.scoreB.wazaAri || 0}.${m.scoreB.yuko || 0}` : "0.0.0";
-
-    const winnerName = winnerA
-      ? m.slotA.playerName
-      : winnerB
-      ? m.slotB.playerName
-      : isBye
-      ? "BYE"
-      : "";
-
-    return `
-      <div class="match-card ${m.status === 'COMPLETED' ? 'completed' : ''}">
-        <div class="match-card-top">
-          <span class="match-num">MATCH #${m.matchNumber}</span>
-          <span class="mat-num">MAT ${m.matNumber || draw.matNumber || 1}</span>
-        </div>
-        <div class="player-slot ${winnerA ? 'winner' : ''}">
-          <div class="player-info">
-            ${m.slotA.seedNumber ? `<span class="seed-badge">#${m.slotA.seedNumber}</span>` : ''}
-            <span class="player-name">${m.slotA.playerName || 'TBD'}</span>
-            <span class="player-club">${clubA ? `(${clubA})` : ''}</span>
-          </div>
-          <div class="score-pill">${scoreA_str}</div>
-        </div>
-        <div class="slot-divider"></div>
-        <div class="player-slot ${winnerB ? 'winner' : ''}">
-          <div class="player-info">
-            ${m.slotB.seedNumber ? `<span class="seed-badge">#${m.slotB.seedNumber}</span>` : ''}
-            <span class="player-name">${m.slotB.playerName || 'TBD'}</span>
-            <span class="player-club">${clubB ? `(${clubB})` : ''}</span>
-          </div>
-          <div class="score-pill">${scoreB_str}</div>
-        </div>
-        ${m.status === 'COMPLETED' && !isBye ? `
-          <div class="match-card-bottom">
-            <span>🏆 Winner: <strong>${winnerName}</strong></span>
-            <span>${m.elapsedSeconds ? formatTime(m.elapsedSeconds) : ''}</span>
-          </div>
-        ` : ''}
-      </div>
-    `;
-  };
+  const mainTree = renderMainBracketTree(mainRounds);
+  const repTree = renderRepechageBracket(repechageRounds, mainTree.matchCount + 1);
 
   const html = `
     <!DOCTYPE html>
@@ -1675,112 +1803,12 @@ export function exportEliminationChartPDF(
           gap: 8px;
         }
 
-        .bracket-tree {
-          display: flex;
-          gap: 24px;
-          align-items: stretch;
-          justify-content: flex-start;
-          margin-bottom: 25px;
+        .repechage-divider {
+          border: none;
+          border-top: 2px dashed #cbd5e1;
+          margin: 30px 0;
         }
-        .round-col {
-          flex: 1;
-          min-width: 230px;
-          display: flex;
-          flex-direction: column;
-          gap: 14px;
-        }
-        .round-title {
-          font-size: 11px;
-          font-weight: 900;
-          color: #FF7400;
-          text-transform: uppercase;
-          background: #f8fafc;
-          border: 1px solid #cbd5e1;
-          padding: 6px 10px;
-          border-radius: 6px;
-          text-align: center;
-        }
-        .round-matches {
-          display: flex;
-          flex-direction: column;
-          justify-content: space-around;
-          flex: 1;
-          gap: 14px;
-        }
-
-        .match-card {
-          border: 1.5px solid #cbd5e1;
-          border-radius: 8px;
-          background: #fff;
-          overflow: hidden;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        }
-        .match-card.completed { border-color: #94a3b8; }
-        .match-card-top {
-          background: #f8fafc;
-          padding: 4px 8px;
-          font-size: 10px;
-          font-weight: 800;
-          color: #475569;
-          display: flex;
-          justify-content: space-between;
-          border-bottom: 1px solid #e2e8f0;
-        }
-        .match-num { color: #FF7400; }
-        .player-slot {
-          padding: 7px 10px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          font-size: 12px;
-        }
-        .player-slot.winner {
-          background: #f0fdf4;
-          font-weight: 800;
-        }
-        .player-info {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          overflow: hidden;
-        }
-        .seed-badge {
-          background: #fef3c7;
-          color: #b45309;
-          font-size: 10px;
-          font-weight: 900;
-          padding: 2px 5px;
-          border-radius: 4px;
-        }
-        .player-name { font-weight: 700; color: #0f172a; white-space: nowrap; }
-        .player-club { font-size: 10px; color: #64748b; white-space: nowrap; }
-        .score-pill {
-          background: #f1f5f9;
-          color: #0f172a;
-          font-size: 10px;
-          font-weight: 800;
-          padding: 2px 6px;
-          border-radius: 4px;
-          font-family: monospace;
-        }
-        .player-slot.winner .score-pill {
-          background: #16a34a;
-          color: #fff;
-        }
-        .slot-divider {
-          height: 1px;
-          background: #e2e8f0;
-        }
-        .match-card-bottom {
-          background: #f8fafc;
-          border-top: 1px solid #e2e8f0;
-          padding: 4px 8px;
-          font-size: 10px;
-          color: #16a34a;
-          display: flex;
-          justify-content: space-between;
-          font-weight: 700;
-        }
+        ${BX_STYLES}
 
         .signatures-section {
           margin-top: 40px;
@@ -1856,39 +1884,14 @@ export function exportEliminationChartPDF(
       <div class="section-header">
         <span>🏆</span> MAIN CHAMPIONSHIP BRACKET (${formatLabel})
       </div>
-      <div class="bracket-tree">
-        ${mainRounds.map((round, ri) => `
-          <div class="round-col">
-            <div class="round-title">${getRoundLabel(draw.rounds, ri, false)}</div>
-            <div class="round-matches">
-              ${round.map(m => renderMatchCard({
-                ...m,
-                roundIndex: ri,
-                roundLabel: getRoundLabel(draw.rounds, ri, false),
-              })).join('')}
-            </div>
-          </div>
-        `).join('')}
-      </div>
+      ${mainTree.html}
 
       ${repechageRounds.length > 0 ? `
-        <div class="section-header" style="margin-top: 30px;">
-          <span>🛡️</span> REPECHAGE & BRONZE MEDAL BRACKETS
+        <hr class="repechage-divider" />
+        <div class="section-header">
+          <span>🛡️</span> REPECHAGE & BRONZE MEDAL BRACKET
         </div>
-        <div class="bracket-tree">
-          ${repechageRounds.map((round, ri) => `
-            <div class="round-col">
-              <div class="round-title">${getRoundLabel(draw.rounds, mainCount + ri, false)}</div>
-              <div class="round-matches">
-                ${round.map(m => renderMatchCard({
-                  ...m,
-                  roundIndex: mainCount + ri,
-                  roundLabel: getRoundLabel(draw.rounds, mainCount + ri, false),
-                })).join('')}
-              </div>
-            </div>
-          `).join('')}
-        </div>
+        ${repTree.html}
       ` : ''}
 
       <div class="signatures-section">
