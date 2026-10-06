@@ -33,6 +33,8 @@ const Header = () => {
   const userStatus = isMounted ? localStorage.getItem("userStatus") : null;
   const userName = isMounted ? localStorage.getItem("userName") : null;
   const isAuthPage = pathname === "/login";
+  // The registration role-selection page uses a cleaner single-row navbar
+  const isRegisterLanding = pathname === "/register";
 
   if (isDashboard || isAuthPage) return null;
 
@@ -68,7 +70,7 @@ const Header = () => {
     { name: "Committee", href: "#", hasDropdown: true },
     { name: "News & Events", href: "#", hasDropdown: true },
     { name: "Honours & Thanks", href: "#", hasDropdown: true },
-    { name: "Counseling", href: "#", hasDropdown: true },
+    { name: isRegisterLanding ? "Counselling" : "Counseling", href: "#", hasDropdown: true },
     { name: "Judo Tutorial", href: "#", hasDropdown: true },
     { name: "Contact Us", href: "/contact" },
   ];
@@ -76,6 +78,7 @@ const Header = () => {
   return (
     <header className="w-full relative z-50">
       {/* Top Header - Hidden on Mobile, Shown on Desktop (xl+) */}
+      {!isRegisterLanding && (
       <div 
         className="hidden xl:block relative w-full text-[#FF7400] py-2 md:py-3 overflow-hidden min-h-[36px] md:min-h-[40px] shadow-[0_2px_8px_0_rgba(43,19,0,0.4)]"
         style={{
@@ -100,11 +103,12 @@ const Header = () => {
           </nav>
         </div>
       </div>
+      )}
 
       {/* Main Header */}
-      <div className="relative w-full bg-white py-2 md:py-3 px-4 md:px-8 border-b border-gray-100">
+      <div className={`relative w-full bg-white ${isRegisterLanding ? "py-1.5 md:py-2" : "py-2 md:py-3"} px-4 md:px-8 border-b ${isRegisterLanding ? "border-[#F4D6BF]/60 shadow-[0_1px_12px_rgba(50,19,14,0.04)]" : "border-gray-100"}`}>
         {/* Background Grid Pattern */}
-        <div className="absolute inset-0 z-0 opacity-[0.05] pointer-events-none overflow-hidden" style={{ backgroundImage: `linear-gradient(to right, #f26522 1px, transparent 1px), linear-gradient(to bottom, #f26522 1px, transparent 1px)`, backgroundSize: '80px 80px' }} />
+        {!isRegisterLanding && <div className="absolute inset-0 z-0 opacity-[0.05] pointer-events-none overflow-hidden" style={{ backgroundImage: `linear-gradient(to right, #f26522 1px, transparent 1px), linear-gradient(to bottom, #f26522 1px, transparent 1px)`, backgroundSize: '80px 80px' }} />}
 
         <div className="max-w-[1440px] mx-auto flex items-center relative z-10">
           {/* Logo */}
@@ -118,7 +122,7 @@ const Header = () => {
                 priority
                 loading="eager"
                 sizes="(max-width: 768px) 100vw, 100px"
-                className="w-auto h-12 md:h-16 object-contain transition-transform group-hover:scale-105"
+                className={`w-auto ${isRegisterLanding ? "h-12 md:h-14" : "h-12 md:h-16"} object-contain transition-transform group-hover:scale-105`}
               />
               <span className="block xl:hidden text-[9px] xs:text-[10px] sm:text-sm font-[900] text-[#FF7400] tracking-wider leading-tight uppercase whitespace-nowrap">
                 TAMIL NADU JUDO ASSOCIATION 329/2017
@@ -127,11 +131,11 @@ const Header = () => {
           </div>
 
           {/* Desktop Navigation */}
-          <nav className="hidden xl:flex flex-1 justify-center items-center gap-6 xl:gap-8">
+          <nav className={`hidden xl:flex flex-1 justify-center items-center ${isRegisterLanding ? "gap-5 2xl:gap-8" : "gap-6 xl:gap-8"}`}>
             {mainNavLinks.map((link) => (
               <div key={link.name} className="group relative py-4 cursor-pointer">
                 <div className="flex items-center gap-1">
-                  <Link href={link.href} className="text-[14px] font-bold text-gray-900 group-hover:text-[#f26522] transition-colors">
+                  <Link href={link.href} className={`text-[14px] group-hover:text-[#f26522] transition-colors ${isRegisterLanding ? "font-semibold text-[#07152D]" : "font-bold text-gray-900"}`}>
                     {link.name}
                   </Link>
                   {link.hasDropdown && (
@@ -193,6 +197,25 @@ const Header = () => {
           {/* Buttons & Hamburger */}
           <div className="flex items-center gap-2 md:gap-4 flex-shrink-0 ml-auto">
             <div className="hidden lg:flex items-center gap-3">
+              {isRegisterLanding && (
+                <div className="flex items-center gap-1 mr-1">
+                  <button
+                    type="button"
+                    aria-label="Search"
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-[#FF7200] hover:text-[#E06400] hover:bg-[#FFF0E5] transition-colors"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" strokeWidth="2.2" /><path strokeLinecap="round" strokeWidth="2" d="M20 20l-3.5-3.5" /></svg>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Cart"
+                    className="relative w-10 h-10 rounded-full flex items-center justify-center text-[#07152D] hover:text-[#FF7200] hover:bg-[#FFF0E5] transition-colors"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4h2l2.4 10.2a1 1 0 001 .8h8.9a1 1 0 001-.76L20 8H6.2" /><circle cx="9" cy="19" r="1.4" fill="currentColor" stroke="none" /><circle cx="17" cy="19" r="1.4" fill="currentColor" stroke="none" /></svg>
+                    <span className="absolute top-1 right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-[#FF7200] text-white text-[9px] font-bold leading-4 text-center">0</span>
+                  </button>
+                </div>
+              )}
               {isLoggedIn ? (
                 <Link 
                   href={
@@ -211,10 +234,13 @@ const Header = () => {
                 </Link>
               ) : (
                 <>
-                  <Button href="/login" variant="outline">
+                  <Button href="/login" variant="outline" className={isRegisterLanding ? "gap-2 border-[#32130E]/70! text-[#07152D]! hover:border-[#FF7200]! hover:text-[#FF7200]! hover:bg-[#FFF0E5]/60!" : ""}>
+                    {isRegisterLanding && (
+                      <svg className="w-[18px] h-[18px]" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="7.5" r="4.5" /><path d="M3.5 21c.8-4.4 4.2-7 8.5-7s7.7 2.6 8.5 7z" /></svg>
+                    )}
                     Login / Sign In
                   </Button>
-                  <Button href="/register" variant="primary">
+                  <Button href="/register" variant="primary" className={isRegisterLanding ? "px-7!" : ""}>
                     Register Now
                   </Button>
                 </>
