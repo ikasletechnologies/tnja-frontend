@@ -1,188 +1,46 @@
-"use client";
+﻿"use client";
 
-import React, { useEffect, useState } from "react";
-import { 
-  Save, 
-  Settings, 
-  CreditCard, 
-  Loader2, 
-  AlertCircle, 
-  CheckCircle2,
-  User,
-  Users,
-  Building2,
-  BadgeCheck
-} from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { AlertCircle, Bell, Building2, CheckCircle2, CircleDollarSign, CreditCard, Database, Download, FileCheck2, Globe2, IndianRupee, Loader2, LockKeyhole, Mail, RefreshCcw, Save, Settings, ShieldCheck, User, UserCheck, Users, WalletCards } from "lucide-react";
 import { motion } from "framer-motion";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000/api";
+const STORAGE_KEY = "tnja_admin_settings_preferences";
+type Fees = { playerFee:number; coachFee:number; memberFee:number; clubFee:number };
+type Prefs = { allowOnlineRegistrations:boolean; autoApproveMembers:boolean; requireDocumentVerification:boolean; emailNotifications:boolean; grievanceNotifications:boolean; eventReminders:boolean; notificationEmail:string; organisationName:string; supportEmail:string; onlinePayments:boolean; emailReceipts:boolean; paymentReferenceRequired:boolean; maintenanceMode:boolean; auditLogging:boolean; sessionTimeout:string };
+type Tab = "fees"|"general"|"notifications"|"payments"|"system";
+const DEFAULT_FEES:Fees={playerFee:500,coachFee:1000,memberFee:1000,clubFee:1000};
+const DEFAULT_PREFS:Prefs={allowOnlineRegistrations:true,autoApproveMembers:false,requireDocumentVerification:true,emailNotifications:true,grievanceNotifications:true,eventReminders:true,notificationEmail:"admin@tnja.in",organisationName:"Tamil Nadu Judo Association",supportEmail:"support@tnja.in",onlinePayments:true,emailReceipts:true,paymentReferenceRequired:true,maintenanceMode:false,auditLogging:true,sessionTimeout:"30"};
+const tabs:[Tab,string,React.ElementType][]=[["fees","Registration Fees",IndianRupee],["general","General Settings",Settings],["notifications","Email & Notifications",Mail],["payments","Payment Settings",CreditCard],["system","System Configuration",ShieldCheck]];
 
-export default function GlobalSettingsPage() {
-  const [settings, setSettings] = useState({
-    playerFee: 0,
-    coachFee: 0,
-    memberFee: 0,
-    clubFee: 0
-  });
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+function Toggle({value,change}:{value:boolean;change:()=>void}){return <button type="button" role="switch" aria-checked={value} onClick={change} className={`relative h-6 w-11 rounded-full ${value?"bg-[#ff6500]":"bg-slate-300"}`}><span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-all ${value?"left-6":"left-1"}`}/></button>}
+function Title({icon:Icon,title,text}:{icon:React.ElementType;title:string;text:string}){return <div className="mb-4 flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-orange-50 text-[#ff6500]"><Icon size={21}/></span><div><h2 className="font-bold text-[#0d1b3d]">{title}</h2><p className="text-xs text-slate-500">{text}</p></div></div>}
+function Card({icon,title,text,children}:{icon:React.ElementType;title:string;text:string;children:React.ReactNode}){return <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><Title icon={icon} title={title} text={text}/>{children}</section>}
+function SwitchRow({icon:Icon,title,text,value,change}:{icon:React.ElementType;title:string;text:string;value:boolean;change:()=>void}){return <div className="flex items-center gap-3 border-b border-slate-100 p-3 last:border-0"><span className="grid h-10 w-10 place-items-center rounded-xl bg-slate-50 text-slate-500"><Icon size={18}/></span><div className="min-w-0 flex-1"><p className="text-sm font-bold text-[#0d1b3d]">{title}</p><p className="truncate text-xs text-slate-500">{text}</p></div><Toggle value={value} change={change}/></div>}
+function Field({label,value,change,type="text"}:{label:string;value:string;change:(v:string)=>void;type?:string}){return <label className="block"><span className="mb-1 block text-xs font-bold text-slate-600">{label}</span><input type={type} value={value} onChange={e=>change(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none focus:border-orange-400"/></label>}
 
-  useEffect(() => {
-    fetchSettings();
-  }, []);
-
-  const fetchSettings = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/settings/global`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to fetch settings");
-      setSettings(data);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    setError("");
-    setSuccess("");
-
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE}/settings/global`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify(settings)
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to update settings");
-
-      setSuccess("Fees updated successfully!");
-      setTimeout(() => setSuccess(""), 3000);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <Loader2 className="w-10 h-10 text-[#FF7400] animate-spin" />
-        <p className="text-slate-500 font-medium">Loading settings...</p>
-      </div>
-    );
-  }
-
-  const feeItems = [
-    { key: "playerFee", label: "Player Registration Fee", icon: User },
-    { key: "coachFee", label: "Coach/Referee Registration Fee", icon: BadgeCheck },
-    { key: "memberFee", label: "Member Registration Fee", icon: Users },
-    { key: "clubFee", label: "Club Registration Fee", icon: Building2 },
-  ];
-
-  return (
-    <div className="max-w-4xl mx-auto space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-slate-800">Global Settings</h1>
-        <p className="text-slate-500">Manage registration fees and platform-wide configurations</p>
-      </div>
-
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-3xl p-8 shadow-sm border border-slate-200"
-      >
-        <div className="flex items-center gap-3 mb-8 pb-4 border-b border-slate-100">
-          <div className="p-2 bg-[#FF7400]/10 text-[#FF7400] rounded-lg">
-            <CreditCard size={20} />
-          </div>
-          <h2 className="text-xl font-bold text-slate-800">Registration Fees (INR)</h2>
-        </div>
-
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-xl flex items-center gap-3 border border-red-100">
-            <AlertCircle size={20} />
-            <span className="font-medium">{error}</span>
-          </div>
-        )}
-
-        {success && (
-          <div className="mb-6 p-4 bg-green-50 text-green-600 rounded-xl flex items-center gap-3 border border-green-100">
-            <CheckCircle2 size={20} />
-            <span className="font-medium">{success}</span>
-          </div>
-        )}
-
-        <form onSubmit={handleUpdate} className="space-y-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {feeItems.map((item) => (
-              <div key={item.key} className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                  <item.icon size={16} className="text-[#FF7400]" />
-                  {item.label}
-                </label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₹</span>
-                  <input 
-                    type="number"
-                    value={(settings as any)[item.key]}
-                    onChange={(e) => setSettings({ ...settings, [item.key]: parseFloat(e.target.value) })}
-                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/20 focus:border-[#FF7400] transition-all font-bold text-slate-800"
-                    placeholder="0.00"
-                    required
-                    min="0"
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="pt-4">
-            <button 
-              type="submit"
-              disabled={saving}
-              className="px-8 py-3 bg-[#FF7400] text-white rounded-xl font-bold hover:bg-orange-600 transition-all flex items-center gap-2 disabled:opacity-70 shadow-lg shadow-orange-500/20 cursor-pointer"
-            >
-              {saving ? (
-                <>
-                  <Loader2 size={20} className="animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save size={20} />
-                  Save Changes
-                </>
-              )}
-            </button>
-          </div>
-        </form>
-      </motion.div>
-
-      <div className="bg-orange-50 rounded-2xl p-6 border border-orange-100">
-        <div className="flex gap-4">
-          <div className="p-2 bg-orange-100 text-[#FF7400] rounded-lg h-fit">
-            <AlertCircle size={20} />
-          </div>
-          <div>
-            <h3 className="font-bold text-orange-800 mb-1">Important Notice</h3>
-            <p className="text-orange-700 text-sm leading-relaxed">
-              Updating these fees will immediately affect all new payment orders. Existing orders created but not yet paid will maintain the previous fee amount.
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+export default function SettingsPage(){
+ const [tab,setTab]=useState<Tab>("fees"),[fees,setFees]=useState(DEFAULT_FEES),[savedFees,setSavedFees]=useState(DEFAULT_FEES),[prefs,setPrefs]=useState(DEFAULT_PREFS),[savedPrefs,setSavedPrefs]=useState(DEFAULT_PREFS),[loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[message,setMessage]=useState<{ok:boolean;text:string}|null>(null);
+ useEffect(()=>{void(async()=>{try{const stored=localStorage.getItem(STORAGE_KEY);if(stored){const merged={...DEFAULT_PREFS,...JSON.parse(stored)};setPrefs(merged);setSavedPrefs(merged)}const res=await fetch(`${API_BASE}/settings/global`),data=await res.json();if(!res.ok)throw new Error(data.error||"Failed to fetch settings");const next={playerFee:Number(data.playerFee??500),coachFee:Number(data.coachFee??1000),memberFee:Number(data.memberFee??1000),clubFee:Number(data.clubFee??1000)};setFees(next);setSavedFees(next)}catch(e){setMessage({ok:false,text:e instanceof Error?e.message:"Unable to load settings"})}finally{setLoading(false)}})()},[]);
+ const dirty=useMemo(()=>JSON.stringify(fees)!==JSON.stringify(savedFees)||JSON.stringify(prefs)!==JSON.stringify(savedPrefs),[fees,savedFees,prefs,savedPrefs]);
+ const pref=<K extends keyof Prefs>(key:K,value:Prefs[K])=>setPrefs(p=>({...p,[key]:value}));
+ const save=async()=>{setSaving(true);setMessage(null);try{if(JSON.stringify(fees)!==JSON.stringify(savedFees)){const res=await fetch(`${API_BASE}/settings/global`,{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${localStorage.getItem("token")}`},body:JSON.stringify(fees)}),data=await res.json();if(!res.ok)throw new Error(data.error||"Failed to update fees")}localStorage.setItem(STORAGE_KEY,JSON.stringify(prefs));setSavedFees(fees);setSavedPrefs(prefs);setMessage({ok:true,text:"Settings saved successfully."})}catch(e){setMessage({ok:false,text:e instanceof Error?e.message:"Unable to save settings"})}finally{setSaving(false);setTimeout(()=>setMessage(null),3500)}};
+ const reset=()=>{if(tab==="fees")setFees(DEFAULT_FEES);else if(tab==="general")setPrefs(p=>({...p,allowOnlineRegistrations:true,autoApproveMembers:false,requireDocumentVerification:true,organisationName:DEFAULT_PREFS.organisationName,supportEmail:DEFAULT_PREFS.supportEmail}));else if(tab==="notifications")setPrefs(p=>({...p,emailNotifications:true,grievanceNotifications:true,eventReminders:true,notificationEmail:DEFAULT_PREFS.notificationEmail}));else if(tab==="payments")setPrefs(p=>({...p,onlinePayments:true,emailReceipts:true,paymentReferenceRequired:true}));else setPrefs(p=>({...p,maintenanceMode:false,auditLogging:true,sessionTimeout:"30"}));setMessage({ok:true,text:"Defaults restored. Save to apply."})};
+ const exportData=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify({fees,preferences:prefs,exportedAt:new Date().toISOString()},null,2)],{type:"application/json"})),a=document.createElement("a");a.href=url;a.download=`tnja-settings-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(url)};
+ if(loading)return <div className="flex min-h-[55vh] items-center justify-center gap-3"><Loader2 className="animate-spin text-[#ff6500]"/><span>Loading settings...</span></div>;
+ const feeItems=[{key:"playerFee" as const,label:"Player Registration",icon:User},{key:"coachFee" as const,label:"Coach / Referee",icon:UserCheck},{key:"memberFee" as const,label:"Member Registration",icon:Users},{key:"clubFee" as const,label:"Club Registration",icon:Building2}];
+ const actions=<div className="flex gap-2"><button onClick={reset} className="flex items-center gap-2 rounded-lg border border-orange-300 px-3 py-2 text-xs font-bold"><RefreshCcw size={15}/>Reset</button><button onClick={save} disabled={!dirty||saving} className="flex items-center gap-2 rounded-lg bg-[#ff6500] px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{saving?<Loader2 className="animate-spin" size={15}/>:<Save size={15}/>}Save Changes</button></div>;
+ return <div className="space-y-5 pb-8">
+  <motion.section initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}} className="relative overflow-hidden rounded-2xl border border-orange-100 bg-gradient-to-r from-[#fffaf6] to-[#ffe8da] px-6 py-5"><div className="absolute -right-8 -top-16 h-48 w-48 rounded-full border-[28px] border-white/40"/><div className="relative flex items-center gap-4"><span className="grid h-14 w-14 place-items-center rounded-full bg-white/80 text-[#ff6500]"><Settings size={30}/></span><div><h1 className="text-3xl font-extrabold text-[#ff5b00]">Settings</h1><p className="text-sm text-slate-500">Manage registration fees, platform configurations, and system preferences.</p></div></div></motion.section>
+  <div className="overflow-x-auto border-b"><div className="flex min-w-max">{tabs.map(([key,label,Icon])=><button key={key} onClick={()=>setTab(key)} className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-bold ${tab===key?"border-[#ff6500] text-[#ff6500]":"border-transparent text-slate-500"}`}><Icon size={18}/>{label}</button>)}</div></div>
+  {message&&<div className={`flex items-center gap-2 rounded-xl border p-3 text-sm font-semibold ${message.ok?"border-emerald-200 bg-emerald-50 text-emerald-700":"border-red-200 bg-red-50 text-red-700"}`}>{message.ok?<CheckCircle2 size={18}/>:<AlertCircle size={18}/>} {message.text}</div>}
+  {tab==="fees"&&<><div className="grid gap-5 xl:grid-cols-[1fr_340px]"><Card icon={IndianRupee} title="Registration Fees (INR)" text="Set fees for each registration category."><div className="mb-4 flex justify-end">{actions}</div><div className="grid gap-4 md:grid-cols-2">{feeItems.map(({key,label,icon:Icon})=><label key={key} className="rounded-xl border p-4 focus-within:border-orange-300"><span className="flex items-center gap-2 text-sm font-bold"><Icon className="text-[#ff6500]" size={18}/>{label} Fee</span><p className="text-xs text-slate-500">Applied to each new registration.</p><span className="mt-3 flex overflow-hidden rounded-lg border bg-slate-50"><b className="grid w-10 place-items-center border-r text-slate-500">₹</b><input type="number" min="0" value={fees[key]} onChange={e=>setFees(f=>({...f,[key]:Math.max(0,Number(e.target.value))}))} className="w-full bg-transparent px-3 py-2.5 font-bold outline-none"/></span></label>)}</div></Card><Card icon={CircleDollarSign} title="Fee Preview" text="Current fee structure">{feeItems.map(({key,label,icon:Icon})=><div key={key} className="flex items-center gap-3 border-b p-3 last:border-0"><span className="grid h-10 w-10 place-items-center rounded-full bg-orange-50 text-[#ff6500]"><Icon size={18}/></span><div className="flex-1"><b className="text-xs">{label}</b><p className="text-[11px] text-slate-400">Per registration</p></div><b>₹ {fees[key].toLocaleString("en-IN")}</b></div>)}</Card></div><div className="flex gap-3 rounded-2xl border border-orange-200 bg-orange-50 p-4"><AlertCircle className="text-[#ff6500]"/><p className="text-xs text-orange-800"><b className="block text-sm">Important Notice</b>Updated fees affect new payment orders. Existing orders retain their previous amount.</p></div></>}
+  {tab==="general"&&<div className="grid gap-5 lg:grid-cols-2"><Card icon={Globe2} title="Organisation Profile" text="Basic portal information."><div className="space-y-4"><Field label="Organisation Name" value={prefs.organisationName} change={v=>pref("organisationName",v)}/><Field label="Support Email" type="email" value={prefs.supportEmail} change={v=>pref("supportEmail",v)}/></div></Card><Card icon={Settings} title="Registration Controls" text="Configure new registration processing."><SwitchRow icon={UserCheck} title="Allow Online Registrations" text="Enable public registrations" value={prefs.allowOnlineRegistrations} change={()=>pref("allowOnlineRegistrations",!prefs.allowOnlineRegistrations)}/><SwitchRow icon={CheckCircle2} title="Auto Approve Members" text="Approve new members automatically" value={prefs.autoApproveMembers} change={()=>pref("autoApproveMembers",!prefs.autoApproveMembers)}/><SwitchRow icon={FileCheck2} title="Require Document Verification" text="Verify documents before approval" value={prefs.requireDocumentVerification} change={()=>pref("requireDocumentVerification",!prefs.requireDocumentVerification)}/></Card></div>}
+  {tab==="notifications"&&<div className="grid gap-5 lg:grid-cols-[1fr_360px]"><Card icon={Bell} title="Notification Settings" text="Choose administrative alerts."><SwitchRow icon={Mail} title="Email Notifications" text="Alerts for new registrations" value={prefs.emailNotifications} change={()=>pref("emailNotifications",!prefs.emailNotifications)}/><SwitchRow icon={AlertCircle} title="Grievance Notifications" text="Alerts for new grievances" value={prefs.grievanceNotifications} change={()=>pref("grievanceNotifications",!prefs.grievanceNotifications)}/><SwitchRow icon={Bell} title="Event Reminders" text="Reminders for upcoming events" value={prefs.eventReminders} change={()=>pref("eventReminders",!prefs.eventReminders)}/></Card><Card icon={Mail} title="Delivery Address" text="Administrative messages are sent here."><Field label="Notification Email" type="email" value={prefs.notificationEmail} change={v=>pref("notificationEmail",v)}/><p className="mt-4 rounded-xl bg-blue-50 p-4 text-xs text-blue-700">Email delivery also requires server mail configuration.</p></Card></div>}
+  {tab==="payments"&&<div className="grid gap-5 lg:grid-cols-2"><Card icon={WalletCards} title="Payment Preferences" text="Manage payment collection and receipts."><SwitchRow icon={CreditCard} title="Accept Online Payments" text="Allow registration payments" value={prefs.onlinePayments} change={()=>pref("onlinePayments",!prefs.onlinePayments)}/><SwitchRow icon={Mail} title="Email Payment Receipts" text="Send receipts after payment" value={prefs.emailReceipts} change={()=>pref("emailReceipts",!prefs.emailReceipts)}/><SwitchRow icon={FileCheck2} title="Require Payment Reference" text="For manual payments" value={prefs.paymentReferenceRequired} change={()=>pref("paymentReferenceRequired",!prefs.paymentReferenceRequired)}/></Card><Card icon={IndianRupee} title="Currency & Gateway" text="Current payment configuration."><Info label="Settlement Currency" value="Indian Rupee (INR)"/><Info label="Payment Gateway" value="Razorpay"/><Info label="Gateway Status" value="Configured" green/><p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800">Gateway credentials remain securely managed on the server.</p></Card></div>}
+  {tab==="system"&&<div className="grid gap-5 lg:grid-cols-2"><Card icon={ShieldCheck} title="Security & System" text="Administrative security preferences."><SwitchRow icon={AlertCircle} title="Maintenance Mode" text="Restrict public portal access" value={prefs.maintenanceMode} change={()=>pref("maintenanceMode",!prefs.maintenanceMode)}/><SwitchRow icon={Database} title="Audit Logging" text="Record administrative actions" value={prefs.auditLogging} change={()=>pref("auditLogging",!prefs.auditLogging)}/><label className="mt-4 block"><span className="mb-1 block text-xs font-bold">Session Timeout</span><select value={prefs.sessionTimeout} onChange={e=>pref("sessionTimeout",e.target.value)} className="w-full rounded-xl border bg-slate-50 p-3 text-sm font-semibold">{["15","30","60","120"].map(v=><option key={v} value={v}>{v} minutes</option>)}</select></label></Card><Card icon={Database} title="Configuration Backup" text="Download current settings."><button onClick={exportData} className="flex w-full items-center gap-3 rounded-xl border p-4 text-left hover:border-orange-300 hover:bg-orange-50"><span className="grid h-11 w-11 place-items-center rounded-xl bg-orange-100 text-[#ff6500]"><Download size={20}/></span><span className="flex-1"><b className="block text-sm">Export Settings</b><small className="text-slate-500">Download settings as JSON</small></span></button><p className="mt-4 flex gap-2 rounded-xl bg-emerald-50 p-4 text-xs text-emerald-700"><LockKeyhole size={18}/>Passwords, tokens, and payment credentials are excluded.</p></Card></div>}
+  <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-white p-4 shadow-sm"><p className={`text-sm font-semibold ${dirty?"text-amber-600":"text-emerald-600"}`}>{dirty?"You have unsaved changes.":"All changes are saved."}</p>{actions}</div>
+ </div>
 }
+function Info({label,value,green=false}:{label:string;value:string;green?:boolean}){return <div className="mb-3 flex justify-between rounded-xl bg-slate-50 px-4 py-3"><span className="text-xs font-semibold text-slate-500">{label}</span><b className={`text-sm ${green?"text-emerald-600":"text-[#0d1b3d]"}`}>{value}</b></div>}
+

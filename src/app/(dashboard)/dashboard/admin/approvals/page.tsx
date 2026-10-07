@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, Suspense } from "react";
+import React, { useState, useEffect, useCallback, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -9,20 +9,21 @@ import {
   RefreshCw,
   Loader2,
   Mail,
-  Phone,
   CheckCircle2,
   XCircle,
   FileText,
   Download,
   X,
-  MapPin,
-  MoreHorizontal,
-  ChevronDown,
   Shield,
   Users,
   UserCheck,
   Award,
-  Calendar
+  Calendar,
+  Search,
+  SlidersHorizontal,
+  ClipboardCheck,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 
 type ApprovalType = "CLUB" | "STUDENT" | "COACH" | "MEMBER" | "EVENT";
@@ -56,7 +57,7 @@ function resolveApplication(raw: any, type: ApprovalType): Application {
   let email = raw.email || "";
   let phone = raw.mobileNumber || raw.contactNumber || "";
   let location = raw.district?.name || raw.city || raw.location || "—";
-  let avatar = raw.profilePhoto || raw.photo || "";
+  const avatar = raw.profilePhoto || raw.photo || "";
 
   switch (type) {
     case "CLUB":
@@ -119,6 +120,9 @@ function ApprovalsContent() {
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [districtFilter, setDistrictFilter] = useState("ALL");
+  const [newestFirst, setNewestFirst] = useState(true);
 
   const tabs: { id: ApprovalType; label: string; icon: React.ComponentType<any> }[] = [
     { id: "CLUB", label: "Clubs", icon: Shield },
@@ -269,6 +273,23 @@ function ApprovalsContent() {
     REPLAY:   { label: "REPLAY",   dot: "bg-amber-500",  text: "text-amber-600" },
   };
 
+  const districts = useMemo(
+    () => Array.from(new Set(applications.map((item) => item.location).filter((location) => location && location !== "—"))).sort(),
+    [applications]
+  );
+
+  const filteredApplications = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    return applications
+      .filter((item) => districtFilter === "ALL" || item.location === districtFilter)
+      .filter((item) => !query || [item.name, item.email, item.phone, item.location, item.subtitle].some((value) => value?.toLowerCase().includes(query)))
+      .sort((a, b) => {
+        const first = new Date(a.rawData?.createdAt || 0).getTime();
+        const second = new Date(b.rawData?.createdAt || 0).getTime();
+        return newestFirst ? second - first : first - second;
+      });
+  }, [applications, districtFilter, newestFirst, searchTerm]);
+
   return (
     <div className="space-y-6">
       {/* Toast */}
@@ -289,228 +310,155 @@ function ApprovalsContent() {
       </AnimatePresence>
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-black text-[#FF7400]">Pending Approvals</h1>
-          <p className="text-slate-500 text-sm mt-1">
-            Review and approve registrations. An email with login credentials is sent automatically on approval.
-          </p>
+      <section className="overflow-hidden rounded-2xl border border-orange-100 bg-[linear-gradient(120deg,#fffaf5_0%,#ffffff_58%,#fff0e4_100%)] px-5 py-6 shadow-sm sm:px-8">
+        <div className="flex items-center gap-4">
+          <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-orange-100 text-[#ff6b00] shadow-sm">
+            <ClipboardCheck size={28} />
+          </span>
+          <div>
+            <p className="text-xs font-semibold text-slate-400">Dashboard / Approvals</p>
+            <h1 className="mt-1 text-2xl font-black tracking-tight text-[#ff6b00] sm:text-3xl">Pending Approvals</h1>
+            <p className="mt-1 max-w-3xl text-sm text-slate-500">
+              Review and approve registrations. Login credentials are sent automatically after approval.
+            </p>
+          </div>
         </div>
-        <button
-          onClick={fetchApplications}
-          className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-600 font-semibold hover:bg-slate-50 transition-all text-sm shadow-sm"
-        >
-          <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
-          Refresh
-        </button>
-      </div>
+      </section>
 
-      {/* Categories Sidebar & Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
-        {/* Sidebar */}
-        <div className="lg:col-span-1 bg-white rounded-[24px] border border-slate-100 p-4 space-y-2 shadow-sm">
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-3 mb-2">
-            Categories
-          </p>
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all text-left ${
-                  isActive
-                    ? "bg-[#FF7400]/10 text-[#FF7400] shadow-[0_2px_8px_-2px_rgba(255,116,0,0.15)]"
-                    : "text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                <Icon size={18} className={isActive ? "text-[#FF7400]" : "text-slate-400"} />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Content Area */}
-        <div className="lg:col-span-3">
-          {/* Status Segmented Control */}
-          <div className="flex gap-2 mb-6 bg-slate-50 p-1.5 rounded-2xl border border-slate-100 w-fit">
-            {statusTabs.map((st) => {
-              const isActive = activeStatus === st.id;
+      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[250px_minmax(0,1fr)]">
+        {/* Categories */}
+        <aside className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm xl:sticky xl:top-0">
+          <p className="px-3 pb-2 pt-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Categories</p>
+          <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 xl:grid-cols-1">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
               return (
                 <button
-                  key={st.id}
-                  onClick={() => setActiveStatus(st.id)}
-                  className={`px-5 py-2.5 rounded-xl font-bold text-xs transition-all ${
-                    isActive
-                      ? "bg-[#FF7400] text-white shadow-md shadow-[#FF7400]/20"
-                      : "text-slate-500 hover:text-slate-800 hover:bg-slate-100/50"
+                  key={tab.id}
+                  onClick={() => { setActiveTab(tab.id); setSearchTerm(""); setDistrictFilter("ALL"); }}
+                  className={`flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold transition-all ${
+                    isActive ? "bg-orange-50 text-[#ff6b00] shadow-sm ring-1 ring-orange-100" : "text-slate-600 hover:bg-slate-50"
                   }`}
                 >
-                  {st.label}
+                  <Icon size={18} className={isActive ? "text-[#ff6b00]" : "text-slate-400"} />
+                  <span className="min-w-0 flex-1 truncate">{tab.label}</span>
+                  {isActive && <span className="grid size-7 place-items-center rounded-full bg-white text-[11px] font-black text-[#ff6b00]">{applications.length}</span>}
                 </button>
               );
             })}
           </div>
+        </aside>
 
-          {/* List Headers */}
-          <div className="grid grid-cols-[1.5fr_2fr_1fr_1fr_2fr] gap-4 px-8 text-[#FF7400] font-black text-[15px] mb-4">
-            <div>Applicant</div>
-            <div>Contact</div>
-            <div>Location</div>
-            <div>Status</div>
-            <div className="w-[220px] text-center">Actions</div>
-          </div>
+        <main className="min-w-0 space-y-4">
+          {/* Summary */}
+          <section className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+            {[
+              { label: statusTabs.find((item) => item.id === activeStatus)?.label || "Results", value: applications.length, icon: Users, wrap: "bg-orange-50 border-orange-100", iconStyle: "bg-orange-100 text-orange-600" },
+              { label: "Approved view", value: activeStatus === "APPROVED" ? applications.length : 0, icon: CheckCircle2, wrap: "bg-emerald-50/70 border-emerald-100", iconStyle: "bg-emerald-100 text-emerald-600" },
+              { label: "Denied view", value: activeStatus === "REJECTED" ? applications.length : 0, icon: XCircle, wrap: "bg-red-50/70 border-red-100", iconStyle: "bg-red-100 text-red-500" },
+              { label: "Replay requests", value: activeStatus === "REPLAY" ? applications.length : 0, icon: RefreshCw, wrap: "bg-blue-50/70 border-blue-100", iconStyle: "bg-blue-100 text-blue-600" },
+            ].map((card) => {
+              const Icon = card.icon;
+              return (
+                <div key={card.label} className={`flex items-center gap-4 rounded-2xl border p-4 shadow-sm ${card.wrap}`}>
+                  <span className={`grid size-12 shrink-0 place-items-center rounded-full ${card.iconStyle}`}><Icon size={23} /></span>
+                  <div><p className="text-3xl font-black leading-none text-[#111b3a]">{card.value}</p><p className="mt-1 text-xs font-semibold text-slate-600">{card.label}</p></div>
+                </div>
+              );
+            })}
+          </section>
 
-          {loading ? (
-            <div className="p-20 text-center flex flex-col items-center gap-4 bg-white rounded-[20px] border border-slate-100 shadow-sm">
-              <Loader2 size={40} className="animate-spin text-[#FF7400]" />
-              <p className="text-slate-400 font-medium">Fetching pending approvals...</p>
-            </div>
-          ) : applications.length === 0 ? (
-            <div className="p-20 text-center flex flex-col items-center gap-4 bg-white rounded-[20px] border border-slate-100 shadow-sm">
-              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-2 text-slate-300">
-                <MessageSquare size={28} />
-              </div>
-              <h3 className="text-lg font-bold text-slate-400">No pending applications</h3>
-              <p className="text-slate-400 text-sm mt-1">Check back later for new applications.</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <AnimatePresence mode="popLayout">
-                {applications.map((item) => {
-                  const sc = statusConfig[item.status] || statusConfig["PENDING"];
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            {/* Status navigation */}
+            <div className="overflow-x-auto border-b border-slate-100 bg-slate-50/70 p-1.5">
+              <div className="flex min-w-max gap-1">
+                {statusTabs.map((status) => {
+                  const isActive = activeStatus === status.id;
                   return (
-                    <motion.div
-                      key={item.id}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="bg-white rounded-[20px] shadow-sm border border-slate-100 py-5 px-8 flex items-center hover:shadow-md transition-all"
+                    <button
+                      key={status.id}
+                      onClick={() => setActiveStatus(status.id)}
+                      className={`rounded-xl px-5 py-2.5 text-xs font-extrabold transition-all ${isActive ? "bg-[#ff6b00] text-white shadow-md shadow-orange-500/20" : "text-slate-500 hover:bg-white hover:text-slate-800"}`}
                     >
-                      <div className="grid grid-cols-[1.5fr_2fr_1fr_1fr_2fr] gap-4 w-full items-center">
-                        {/* Applicant */}
-                        <div className="flex items-center gap-3">
-                          {item.avatar ? (
-                            <img
-                              src={item.avatar}
-                              alt={item.name}
-                              className="w-11 h-11 rounded-full object-cover border-2 border-slate-100 shadow-sm shrink-0"
-                            />
-                          ) : (
-                            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#FF7400] to-[#E56900] text-white flex items-center justify-center font-bold text-base shadow-sm shrink-0">
-                              {item.name.charAt(0)}
-                            </div>
-                          )}
-                          <div className="flex flex-col justify-center">
-                            <p className="font-bold text-slate-800 text-[15px] truncate">{item.name}</p>
-                            {item.subtitle && item.subtitle !== "No Club" && item.subtitle !== "Member" && item.subtitle !== "Coach" && (
-                              <p className="text-[11px] text-slate-400 mt-0.5 truncate">{item.subtitle}</p>
-                            )}
-                            {item.rawData?.rejectionRemark && (
-                              <p className="text-[11px] text-red-500 font-bold mt-1 bg-red-50 px-2 py-0.5 rounded border border-red-100 max-w-[200px] truncate" title={item.rawData.rejectionRemark}>
-                                Remark: {item.rawData.rejectionRemark}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        
-                        {/* Contact */}
-                        <div className="flex flex-col gap-1.5">
-                          {item.phone && item.phone !== "—" && (
-                            <div className="flex items-center gap-3 text-[13px] text-slate-600">
-                              <Phone size={16} className="text-[#FF7400] shrink-0" /> <span className="truncate">{item.phone}</span>
-                            </div>
-                          )}
-                          {item.email && item.email !== "—" && (
-                            <div className="flex items-center gap-3 text-[13px] text-slate-600">
-                              <Mail size={16} className="text-[#FF7400] shrink-0" /> <span className="truncate">{item.email}</span>
-                            </div>
-                          )}
-                          {(!item.phone || item.phone === "—") && (!item.email || item.email === "—") && (
-                             <span className="text-[13px] text-slate-400 italic">No contact provided</span>
-                          )}
-                        </div>
-
-                        {/* Location */}
-                        <div className="text-[14px] text-slate-700 truncate">
-                          {item.location}
-                        </div>
-
-                        {/* Status */}
-                        <div className="flex items-center gap-2">
-                          <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
-                          <span className={`${sc.text} font-black uppercase text-[13px] tracking-widest truncate`}>{sc.label}</span>
-                        </div>
-
-                        {/* Actions */}
-                        <div className="flex items-center justify-start gap-4">
-                          {item.status === "PENDING" ? (
-                            <>
-                              <button 
-                                onClick={() => {
-                                  setSelectedItem(item);
-                                  setIsDetailModalOpen(true);
-                                }}
-                                disabled={actionLoading === item.id}
-                                className="bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors px-4 py-2 rounded-lg font-bold text-sm shadow-sm disabled:opacity-50 flex items-center justify-center gap-1.5 shrink-0"
-                              >
-                                <Eye size={13} />
-                                Review
-                              </button>
-                              <button 
-                                onClick={() => handleApprove(item)}
-                                disabled={actionLoading === item.id}
-                                className="bg-[#FF7400] hover:bg-orange-600 transition-colors text-white px-5 py-2 rounded-lg font-bold text-sm shadow-sm disabled:opacity-50 flex items-center justify-center gap-1.5 shrink-0"
-                              >
-                                {actionLoading === item.id ? <Loader2 size={13} className="animate-spin" /> : null}
-                                Approve
-                              </button>
-                               <button 
-                                onClick={() => openRequestChangesModal(item)}
-                                disabled={actionLoading === item.id}
-                                className="bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors px-5 py-2 rounded-lg font-bold text-sm shadow-sm disabled:opacity-50 shrink-0"
-                              >
-                                Replay
-                              </button>
-                              <div 
-                                className={`p-[1px] rounded-lg shrink-0 inline-flex ${actionLoading === item.id ? 'opacity-50' : ''}`}
-                                style={{ background: 'linear-gradient(to right, #552700 0%, #FF0E00 25%, #FFDA00 75%, #FF7400 100%)' }}
-                              >
-                                <button 
-                                  onClick={() => openRejectModal(item)}
-                                  disabled={actionLoading === item.id}
-                                  className="text-slate-800 hover:bg-orange-50 transition-colors px-6 py-2 rounded-[7px] font-bold text-sm bg-white flex items-center justify-center"
-                                >
-                                  Deny
-                                </button>
-                              </div>
-                            </>
-                          ) : (
-                            <div className="px-5 py-2 flex items-center gap-1.5">
-                               <span className={`text-sm font-bold ${sc.text}`}>{sc.label}</span>
-                            </div>
-                          )}
-                          
-                          <button 
-                             onClick={() => { setSelectedItem(item); setIsDetailModalOpen(true); }}
-                             className="w-9 h-9 flex items-center justify-center border-[2px] border-slate-800 rounded-full text-slate-800 hover:bg-slate-100 transition-colors ml-auto shrink-0 cursor-pointer"
-                             title="View Details"
-                          >
-                            <MoreHorizontal size={18} className="stroke-3" />
-                          </button>
-                        </div>
-                      </div>
-                    </motion.div>
+                      {status.label}
+                      {isActive && <span className="ml-2 rounded-full bg-white/90 px-2 py-0.5 text-[10px] text-[#ff6b00]">{applications.length}</span>}
+                    </button>
                   );
                 })}
-              </AnimatePresence>
+              </div>
             </div>
-          )}
-        </div>
-      </div>
 
+            {/* Toolbar */}
+            <div className="grid gap-3 border-b border-slate-100 p-4 md:grid-cols-[minmax(240px,1fr)_190px_170px_auto]">
+              <label className="flex items-center gap-2 rounded-xl bg-slate-50 px-3.5 py-2.5 ring-1 ring-inset ring-slate-100 focus-within:ring-orange-200">
+                <Search size={18} className="text-slate-400" />
+                <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search by name, contact, email or ID..." className="w-full bg-transparent text-sm font-medium text-slate-700 outline-none placeholder:text-slate-400" />
+              </label>
+              <select value={districtFilter} onChange={(event) => setDistrictFilter(event.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-600 outline-none focus:border-orange-300">
+                <option value="ALL">All Districts</option>
+                {districts.map((district) => <option key={district} value={district}>{district}</option>)}
+              </select>
+              <button onClick={() => setNewestFirst((value) => !value)} className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-bold text-slate-600 transition hover:bg-slate-50">
+                <SlidersHorizontal size={15} /> {newestFirst ? "Newest First" : "Oldest First"}
+              </button>
+              <button onClick={fetchApplications} className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-600 transition hover:border-orange-200 hover:text-[#ff6b00]">
+                <RefreshCw size={15} className={loading ? "animate-spin" : ""} /> Refresh
+              </button>
+            </div>
+
+            {/* Results */}
+            {loading ? (
+              <div className="flex min-h-72 flex-col items-center justify-center gap-3"><Loader2 size={34} className="animate-spin text-[#ff6b00]" /><p className="text-sm font-semibold text-slate-400">Loading approvals...</p></div>
+            ) : filteredApplications.length === 0 ? (
+              <div className="flex min-h-72 flex-col items-center justify-center gap-3 px-6 text-center"><span className="grid size-16 place-items-center rounded-full bg-slate-50 text-slate-300"><ClipboardCheck size={29} /></span><div><h3 className="font-extrabold text-slate-600">No applications found</h3><p className="mt-1 text-sm text-slate-400">Try another category, status, district or search term.</p></div></div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1120px] text-left text-xs">
+                  <thead className="bg-[#f8fafc] text-slate-500">
+                    <tr><th className="w-12 px-5 py-3.5 font-bold">#</th><th className="px-3 py-3.5 font-bold">Applicant</th><th className="px-3 py-3.5 font-bold">Role</th><th className="px-3 py-3.5 font-bold">Contact</th><th className="px-3 py-3.5 font-bold">District</th><th className="px-3 py-3.5 font-bold">Submitted On</th><th className="px-3 py-3.5 font-bold">Status</th><th className="px-3 py-3.5 font-bold">Actions</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    <AnimatePresence mode="popLayout">
+                      {filteredApplications.map((item, index) => {
+                        const status = statusConfig[item.status] || statusConfig.PENDING;
+                        return (
+                          <motion.tr key={item.id} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="group hover:bg-orange-50/20">
+                            <td className="px-5 py-4 font-bold text-slate-500">{index + 1}</td>
+                            <td className="px-3 py-4"><div className="flex items-center gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-full bg-slate-100 font-black text-slate-500">{item.name.slice(0,2).toUpperCase()}</span><div className="min-w-0"><p className="max-w-[180px] truncate text-sm font-extrabold text-slate-800">{item.name}</p><p className="max-w-[190px] truncate text-[10px] text-slate-400">{item.email || item.subtitle}</p></div></div></td>
+                            <td className="px-3 py-4"><span className="rounded-full bg-blue-50 px-2.5 py-1 font-bold text-blue-600">{tabs.find((tab) => tab.id === activeTab)?.label.slice(0,-1) || activeTab}</span></td>
+                            <td className="px-3 py-4"><p className="font-semibold text-slate-600">{item.phone || "—"}</p></td>
+                            <td className="px-3 py-4 font-semibold text-slate-600">{item.location}</td>
+                            <td className="px-3 py-4"><p className="font-semibold text-slate-600">{item.date}</p><p className="mt-0.5 text-[10px] text-slate-400">{item.subtitle}</p></td>
+                            <td className="px-3 py-4"><span className={`inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-2.5 py-1 font-black ${status.text}`}><span className={`size-2 rounded-full ${status.dot}`} />{status.label}</span></td>
+                            <td className="px-3 py-4">
+                              <div className="flex items-center gap-2">
+                                {item.status === "PENDING" && (
+                                  <>
+                                    <button onClick={() => void handleApprove(item)} disabled={actionLoading === item.id} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 font-extrabold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50">{actionLoading === item.id ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}Approve</button>
+                                    <button onClick={() => openRejectModal(item)} disabled={actionLoading === item.id} className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 font-extrabold text-red-600 transition hover:bg-red-100 disabled:opacity-50"><XCircle size={13} />Deny</button>
+                                    <button onClick={() => openRequestChangesModal(item)} disabled={actionLoading === item.id} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 font-extrabold text-amber-700 transition hover:bg-amber-100 disabled:opacity-50"><RefreshCw size={13} />Replay</button>
+                                  </>
+                                )}
+                                <button onClick={() => { setSelectedItem(item); setIsDetailModalOpen(true); }} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 font-extrabold text-slate-600 transition hover:bg-slate-50"><Eye size={13} />View</button>
+                              </div>
+                            </td>
+                          </motion.tr>
+                        );
+                      })}
+                    </AnimatePresence>
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-4 text-xs font-semibold text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+              <p>Showing {filteredApplications.length ? 1 : 0} to {filteredApplications.length} of {filteredApplications.length} entries</p>
+              <div className="flex items-center gap-2"><button disabled className="grid size-9 place-items-center rounded-lg border border-slate-200 text-slate-300"><ChevronLeft size={15} /></button><span className="grid size-9 place-items-center rounded-lg bg-[#ff6b00] font-black text-white">1</span><button disabled className="grid size-9 place-items-center rounded-lg border border-slate-200 text-slate-300"><ChevronRight size={15} /></button></div>
+            </div>
+          </section>
+        </main>
+      </div>
       {/* Detail Modal */}
       <AnimatePresence>
         {isDetailModalOpen && selectedItem && (

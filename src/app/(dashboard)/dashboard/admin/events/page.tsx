@@ -6,17 +6,19 @@ import {
   Calendar,
   Plus,
   MapPin,
-  Clock,
   Search,
   ChevronRight,
   CheckCircle2,
   XCircle,
   AlertCircle,
   Loader2,
-  Filter,
   ChevronDown,
   Video,
-  User
+  User,
+  Eye,
+  Pencil,
+  RotateCcw,
+  FileText
 } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000/api";
@@ -24,18 +26,18 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000/api";
 export default function EventsPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [filter, setFilter] = useState("ALL");
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [levelFilter, setLevelFilter] = useState("ALL");
+  const [districtFilter, setDistrictFilter] = useState("ALL");
   const [districts, setDistricts] = useState<any[]>([]);
   const [userRole, setUserRole] = useState<string>("GUEST");
   const [userProfile, setUserProfile] = useState<any | null>(null);
   const [eventSections, setEventSections] = useState<string[]>([]);
   const [sectionOpen, setSectionOpen] = useState(false);
   const sectionRef = useRef<HTMLDivElement>(null);
-  const filterRef = useRef<HTMLDivElement>(null);
   const [selectedEvent, setSelectedEvent] = useState<any | null>(null);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -190,28 +192,6 @@ export default function EventsPage() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
-        setIsFilterOpen(false);
-      }
-    };
-
-    const handleScroll = () => {
-      if (isFilterOpen) {
-        setIsFilterOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    window.addEventListener("scroll", handleScroll, true); // true for capture phase to catch all scrolling
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      window.removeEventListener("scroll", handleScroll, true);
-    };
-  }, [isFilterOpen]);
-
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitLoading(true);
@@ -295,12 +275,17 @@ export default function EventsPage() {
 
   const filteredEvents = events.filter(ev => {
     if (filter !== "ALL" && ev.status !== filter) return false;
-    if (searchQuery && !ev.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    if (levelFilter !== "ALL" && ev.level !== levelFilter) return false;
+    const eventDistrict = ev.district?.name || ev.location || "";
+    if (districtFilter !== "ALL" && eventDistrict !== districtFilter) return false;
+    if (searchQuery && ![ev.title, ev.location, ev.level, ev.eventSection].some(value => value?.toLowerCase().includes(searchQuery.toLowerCase()))) return false;
     return true;
   });
 
   const approvedCount = events.filter(e => e.status === "APPROVED").length;
   const pendingCount = events.filter(e => e.status === "PENDING").length;
+  const draftCount = events.filter(e => e.status === "DRAFT" || e.status === "REPLAY").length;
+  const eventDistricts = Array.from(new Set(events.map(event => event.district?.name || event.location).filter(Boolean))).sort();
 
   return (
     <div className="space-y-8 relative">
@@ -321,175 +306,71 @@ export default function EventsPage() {
       </AnimatePresence>
 
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div>
-          <h1 className="text-4xl font-black text-[#FF7400]">Events</h1>
-          <p className="text-slate-500 text-sm mt-1">Create and Monitor Events within your jurisdiction</p>
+      <section className="overflow-hidden rounded-2xl border border-orange-100 bg-[linear-gradient(120deg,#fffaf6_0%,#ffffff_58%,#ffe9df_100%)] px-5 py-5 shadow-sm sm:px-7">
+        <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-4">
+            <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-orange-100 text-[#ff6b00] shadow-sm"><Calendar size={28} /></span>
+            <div><p className="text-xs font-semibold text-slate-400">Dashboard / Events</p><h1 className="mt-1 text-3xl font-black tracking-tight text-[#ff6b00]">Events</h1><p className="mt-1 text-sm text-slate-500">Create and manage events within your jurisdiction.</p></div>
+          </div>
+          <button onClick={() => setIsCreateModalOpen(true)} className="inline-flex items-center justify-center gap-2 rounded-full bg-[linear-gradient(90deg,#ff4d00,#ff7900)] px-7 py-3 text-sm font-extrabold text-white shadow-lg shadow-orange-500/20 transition hover:-translate-y-0.5"><Plus size={18} />Create Event</button>
         </div>
-        <div
-          className="p-[1.5px] rounded-[10px] shrink-0 inline-flex"
-          style={{ background: 'linear-gradient(to right, #552700 0%, #FF0E00 25%, #FFDA00 75%, #FF7400 100%)' }}
-        >
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center gap-2 px-5 py-2.5 bg-white text-slate-800 font-bold rounded-[8.5px] hover:bg-slate-50 transition-all text-sm shadow-sm cursor-pointer"
-          >
-            <Plus size={18} className="stroke-[2.5]" />
-            Create Event
-          </button>
-        </div>
-      </div>
+      </section>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          { label: "TOTAL EVENTS", value: events.length, icon: Calendar, borderColor: "border-[#FF7400] border-b-[4px]", shadowColor: "shadow-[0_14px_28px_-6px_rgba(255,116,0,0.65)]", iconColor: "text-[#FF7400]" },
-          { label: "APPROVED", value: approvedCount, icon: CheckCircle2, borderColor: "border-[#FFDA00] border-b-[4px]", shadowColor: "shadow-[0_14px_28px_-6px_rgba(255,218,0,0.65)]", iconColor: "text-[#FFDA00]" },
-          { label: "PENDING APPROVAL", value: pendingCount, icon: AlertCircle, borderColor: "border-[#552700] border-b-[4px]", shadowColor: "shadow-[0_14px_28px_-6px_rgba(85,39,0,0.65)]", iconColor: "text-[#8B4513]" },
-        ].map((stat) => (
-          <div key={stat.label} className={`bg-white p-6 rounded-[14px] transition-shadow border ${stat.borderColor} ${stat.shadowColor} flex flex-col justify-between h-[130px]`}>
-            <p className="text-[11px] font-semibold text-slate-500 tracking-[0.15em]">{stat.label}</p>
-            <div className="flex items-center justify-between">
-              <h3 className="text-4xl font-black text-slate-900 leading-none">{stat.value}</h3>
-              <div className={`w-[50px] h-[50px] bg-white rounded-full flex items-center justify-center shadow-[0_6px_12px_rgba(0,0,0,0.12),inset_0_3px_6px_rgba(0,0,0,0.12),inset_0_-3px_6px_rgba(255,255,255,1)] ${stat.iconColor}`}>
-                <stat.icon size={22} className="stroke-[2.5]" />
-              </div>
-            </div>
+          { label: "Total Events", value: events.length, icon: Calendar, wrap: "border-orange-200 bg-orange-50/70", iconStyle: "bg-orange-100 text-orange-600" },
+          { label: "Approved", value: approvedCount, icon: CheckCircle2, wrap: "border-emerald-200 bg-emerald-50/70", iconStyle: "bg-emerald-100 text-emerald-600" },
+          { label: "Pending Approval", value: pendingCount, icon: AlertCircle, wrap: "border-amber-200 bg-amber-50/70", iconStyle: "bg-amber-100 text-amber-600" },
+          { label: "Draft / Replay", value: draftCount, icon: FileText, wrap: "border-blue-200 bg-blue-50/70", iconStyle: "bg-blue-100 text-blue-600" },
+        ].map((stat, index) => {
+          const Icon = stat.icon;
+          return <motion.div key={stat.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * .05 }} className={`flex items-center gap-4 rounded-2xl border p-5 shadow-sm ${stat.wrap}`}><span className={`grid size-14 shrink-0 place-items-center rounded-full ${stat.iconStyle}`}><Icon size={26} /></span><div className="min-w-0 flex-1"><p className="text-xs font-semibold text-slate-500">{stat.label}</p><p className="mt-1 text-3xl font-black leading-none text-[#111b3a]">{stat.value}</p></div><ChevronRight size={20} className="text-slate-400" /></motion.div>;
+        })}
+      </section>
+
+      {/* Filters */}
+      <section className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[minmax(240px,1fr)_160px_190px_170px_auto]">
+        <label className="flex items-center gap-2 rounded-xl bg-slate-50 px-3.5 py-2.5 ring-1 ring-inset ring-slate-100 focus-within:ring-orange-200"><Search size={17} className="text-slate-400" /><input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search by name, location or type..." className="w-full bg-transparent text-sm font-medium text-slate-700 outline-none placeholder:text-slate-400" /></label>
+        <select value={levelFilter} onChange={(event) => setLevelFilter(event.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-600 outline-none focus:border-orange-300"><option value="ALL">All Types</option><option value="DISTRICT">District</option><option value="ZONE">Zone</option><option value="STATE">State</option></select>
+        <select value={districtFilter} onChange={(event) => setDistrictFilter(event.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-600 outline-none focus:border-orange-300"><option value="ALL">All Districts</option>{eventDistricts.map((district) => <option key={district} value={district}>{district}</option>)}</select>
+        <select value={filter} onChange={(event) => setFilter(event.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-600 outline-none focus:border-orange-300"><option value="ALL">All Status</option><option value="APPROVED">Approved</option><option value="PENDING">Pending</option><option value="REJECTED">Rejected</option><option value="DRAFT">Draft</option></select>
+        <button onClick={() => { setSearchQuery(""); setFilter("ALL"); setLevelFilter("ALL"); setDistrictFilter("ALL"); }} className="inline-flex items-center justify-center gap-2 rounded-xl border border-orange-200 px-4 py-2.5 text-xs font-extrabold text-[#ff6b00] transition hover:bg-orange-50"><RotateCcw size={15} />Reset</button>
+      </section>
+
+      {/* Events Table */}
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        {loading ? (
+          <div className="flex min-h-80 items-center justify-center"><Loader2 size={36} className="animate-spin text-[#ff6b00]" /></div>
+        ) : filteredEvents.length === 0 ? (
+          <div className="flex min-h-80 flex-col items-center justify-center gap-3 text-center"><span className="grid size-16 place-items-center rounded-full bg-slate-50 text-slate-300"><Calendar size={29} /></span><div><h3 className="font-extrabold text-slate-600">No events found</h3><p className="mt-1 text-sm text-slate-400">Try changing your filters or create a new event.</p></div></div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1080px] text-left text-xs">
+              <thead className="border-b border-slate-100 bg-[#f8fafc] text-slate-500"><tr><th className="w-14 px-5 py-4 font-bold">#</th><th className="px-3 py-4 font-bold">Event Details</th><th className="px-3 py-4 font-bold">Type</th><th className="px-3 py-4 font-bold">Location</th><th className="px-3 py-4 font-bold">Event Date</th><th className="px-3 py-4 font-bold">Entry</th><th className="px-3 py-4 font-bold">Status</th><th className="px-3 py-4 font-bold">Actions</th></tr></thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredEvents.map((event, index) => {
+                  const statusClass = event.status === "APPROVED" ? "bg-emerald-50 text-emerald-700" : event.status === "PENDING" ? "bg-amber-50 text-amber-700" : event.status === "REJECTED" ? "bg-red-50 text-red-600" : "bg-slate-100 text-slate-600";
+                  const dotClass = event.status === "APPROVED" ? "bg-emerald-500" : event.status === "PENDING" ? "bg-amber-500" : event.status === "REJECTED" ? "bg-red-500" : "bg-slate-400";
+                  return (
+                    <motion.tr key={event.id} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="hover:bg-orange-50/20">
+                      <td className="px-5 py-4 font-black text-slate-500">{index + 1}</td>
+                      <td className="px-3 py-4"><div className="flex items-center gap-3"><span className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-xl text-white shadow-sm" style={{ background: event.color ? `linear-gradient(135deg, ${event.color}, ${event.color}88)` : "linear-gradient(135deg,#3b176d,#a23be5)" }}><Calendar size={22} /></span><div className="min-w-0"><p className="max-w-[240px] truncate text-sm font-extrabold text-slate-800">{event.title}</p><p className="mt-1 max-w-[250px] truncate text-[10px] text-slate-400">{event.description || event.eventSection || "TNJA Event"}</p></div></div></td>
+                      <td className="px-3 py-4"><span className="rounded-lg bg-blue-50 px-2.5 py-1 font-extrabold text-blue-600">{event.level || "DISTRICT"}</span></td>
+                      <td className="px-3 py-4"><span className="inline-flex items-center gap-1.5 font-semibold text-slate-600"><MapPin size={14} className="text-slate-400" />{event.district?.name || event.location || "—"}</span></td>
+                      <td className="px-3 py-4"><span className="inline-flex items-center gap-2 font-semibold text-slate-600"><Calendar size={14} className="text-slate-400" />{event.date ? new Date(event.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "TBA"}</span></td>
+                      <td className="px-3 py-4"><p className="font-bold text-slate-600">{event.isPaid ? `₹ ${event.entryFee}` : "Free"}</p><p className="mt-1 text-[10px] text-slate-400">{event.participantType === "ALL" ? "Everyone" : event.participantType}</p></td>
+                      <td className="px-3 py-4"><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-extrabold ${statusClass}`}><span className={`size-2 rounded-full ${dotClass}`} />{event.status || "DRAFT"}</span></td>
+                      <td className="px-3 py-4"><div className="flex items-center gap-2"><button onClick={() => setSelectedEvent(event)} title="View event" className="grid size-9 place-items-center rounded-lg bg-slate-50 text-slate-600 transition hover:bg-blue-50 hover:text-blue-600"><Eye size={16} /></button><button onClick={(clickEvent) => handleOpenEdit(event, clickEvent)} title="Edit event" className="grid size-9 place-items-center rounded-lg bg-slate-50 text-slate-600 transition hover:bg-orange-50 hover:text-[#ff6b00]"><Pencil size={16} /></button>{event.meetingLink && <a href={event.meetingLink} target="_blank" rel="noopener noreferrer" title="Join meeting" className="grid size-9 place-items-center rounded-lg bg-slate-50 text-slate-600 transition hover:bg-purple-50 hover:text-purple-600"><Video size={16} /></a>}</div></td>
+                    </motion.tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        ))}
-      </div>
-
-      {/* Filters & Search */}
-      <div className="flex flex-col md:flex-row gap-4 items-center mb-4">
-        <div className="relative flex-grow w-full">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search events"
-            className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-[10px] focus:outline-none focus:ring-2 focus:ring-[#FF7400]/30 transition-all font-medium text-sm text-slate-700 shadow-sm"
-          />
-        </div>
-        <div className="relative" ref={filterRef}>
-          <div
-            className="p-[1.5px] rounded-[10px] shrink-0 inline-flex shadow-sm"
-            style={{ background: 'linear-gradient(to right, #552700 0%, #FF0E00 25%, #FFDA00 75%, #FF7400 100%)' }}
-          >
-            <button
-              onClick={() => setIsFilterOpen(!isFilterOpen)}
-              className="flex items-center gap-2 px-5 py-2.5 bg-white text-slate-800 font-bold rounded-[8.5px] hover:bg-slate-50 transition-all text-sm cursor-pointer"
-            >
-              <Filter size={16} />
-              {filter === "ALL" ? "Filter" : filter}
-            </button>
-          </div>
-          {isFilterOpen && (
-            <div className="absolute top-full mt-2 right-0 bg-white border border-slate-200 shadow-xl rounded-[10px] overflow-hidden z-50 w-44">
-              {["ALL", "APPROVED", "PENDING", "REJECTED"].map((f) => (
-                <button
-                  key={f}
-                  onClick={() => { setFilter(f); setIsFilterOpen(false); }}
-                  className={`w-full text-left px-4 py-3 text-sm font-bold transition-colors ${filter === f ? "bg-orange-50 text-[#FF7400]" : "text-slate-600 hover:bg-slate-50"
-                    }`}
-                >
-                  {f === "ALL" ? "All Events" : f}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Events List */}
-      {loading ? (
-        <div className="flex justify-center py-20">
-          <Loader2 size={40} className="animate-spin text-[#FF7400]" />
-        </div>
-      ) : filteredEvents.length === 0 ? (
-        <div className="text-center py-20 bg-white border border-slate-200 rounded-[20px] shadow-sm">
-          <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
-            <Calendar size={32} />
-          </div>
-          <h3 className="text-lg font-bold text-slate-500">No Events Found</h3>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {filteredEvents.map((event) => (
-            <motion.div
-              key={event.id}
-              whileHover={{ y: -5 }}
-              onClick={() => setSelectedEvent(event)}
-              className="bg-white rounded-[20px] shadow-xl shadow-slate-200/60 overflow-hidden flex flex-col group cursor-pointer"
-            >
-              <div
-                className="h-44 relative overflow-hidden"
-                style={{ background: event.color ? `linear-gradient(135deg, ${event.color}dd, ${event.color}88, ${event.color}44)` : "linear-gradient(135deg, #1e1b4b, #7c3aed, #FF7400)" }}
-              >
-                <div className="absolute inset-0 bg-black/20"></div>
-                <div className="absolute inset-0 backdrop-blur-[2px]"></div>
-              </div>
-
-              <div className="p-6 flex-grow flex flex-col bg-white rounded-t-[20px] -mt-5 relative z-10 border-t-[4px] border-[#FFDA00]">
-                <h3 className="text-[22px] font-bold text-black mb-5 leading-tight">
-                  {event.title}
-                </h3>
-
-                <div className="space-y-3 mb-6">
-                  <div className="flex items-center gap-3 text-[14px] text-slate-700">
-                    <Calendar size={18} className="text-[#FF7400] stroke-[1.5]" />
-                    {new Date(event.date).toLocaleDateString('en-GB')}
-                  </div>
-                  <div className="flex items-center gap-3 text-[14px] text-slate-700">
-                    <MapPin size={18} className="text-[#FF7400] stroke-[1.5]" />
-                    {event.location}
-                  </div>
-                  {event.meetingLink && (
-                    <div className="flex items-center gap-3 text-[14px] text-slate-700">
-                      <Video size={18} className="text-[#FF7400] stroke-[1.5]" />
-                      <a
-                        href={event.meetingLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-orange-600 hover:text-orange-700 hover:underline font-bold transition-all"
-                      >
-                        Join Meeting
-                      </a>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mb-6 mt-auto">
-                  <span className="inline-block px-3 py-1.5 bg-[#FFEEDC] text-black text-[12px] font-bold rounded-md">
-                    {event.isPaid ? `Entry Fee : ₹ ${event.entryFee}` : 'Free Entry'}
-                  </span>
-                </div>
-
-                {/* Status Box */}
-                <div className={`-mx-6 pl-[20px] pr-6 py-3.5 font-bold text-[15px] ${event.status === "APPROVED" ? "bg-gradient-to-r from-[#FFF9D6] via-[#FFF9D6] to-transparent text-black border-l-[4px] border-[#FFDA00]" :
-                  event.status === "PENDING" ? "bg-gradient-to-r from-[#FDF0E6] via-[#FDF0E6] to-transparent text-black border-l-[4px] border-[#FF7400]" :
-                    "bg-gradient-to-r from-red-50 to-transparent text-red-600 border-l-[4px] border-red-500"
-                  }`}>
-                  {event.status === "APPROVED" ? `Approved by ${event.approvedBy || 'Super Admin'}` :
-                    event.status === "PENDING" ? "Pending Approval" :
-                      "Rejected"}
-                </div>
-                
-                <div className="absolute top-4 right-4 z-20">
-                  <button
-                    onClick={(e) => handleOpenEdit(event, e)}
-                    className="px-4 py-1.5 bg-white/90 backdrop-blur text-[#FF7400] text-xs font-bold rounded-full shadow-sm hover:bg-white transition-all border border-orange-100"
-                  >
-                    Edit Event
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      )}
-
+        )}
+        <div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-4 text-xs font-semibold text-slate-500 sm:flex-row sm:items-center sm:justify-between"><p>Showing {filteredEvents.length ? 1 : 0} to {filteredEvents.length} of {filteredEvents.length} events</p><div className="flex items-center gap-2"><span className="grid size-9 place-items-center rounded-lg bg-[#ff6b00] font-black text-white">1</span></div></div>
+      </section>
       {/* Create Event Modal */}
       <AnimatePresence>
         {isCreateModalOpen && (

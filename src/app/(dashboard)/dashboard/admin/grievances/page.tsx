@@ -6,7 +6,6 @@ import {
   Search,
   Loader2,
   Clock,
-  User,
   Reply,
   CheckCircle2,
   AlertCircle,
@@ -14,9 +13,11 @@ import {
   Send,
   ImageIcon,
   FileText,
-  Paperclip,
   Download,
   ZoomIn,
+  MapPin,
+  Eye,
+  RotateCcw,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -27,6 +28,8 @@ export default function AdminGrievancePage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState("all");
+  const [roleFilter, setRoleFilter] = useState("ALL");
+  const [districtFilter, setDistrictFilter] = useState("ALL");
   const [selectedGrievance, setSelectedGrievance] = useState<any>(null);
   const [replyText, setReplyText] = useState("");
   const [remarkText, setRemarkText] = useState("");
@@ -99,13 +102,23 @@ export default function AdminGrievancePage() {
       g.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
       g.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       g.userId.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesRole = roleFilter === "ALL" || g.role === roleFilter;
+    const grievanceDistrict = g.district?.name || g.districtName || g.location || "";
+    const matchesDistrict = districtFilter === "ALL" || grievanceDistrict === districtFilter;
+    const matchesBase = matchesSearch && matchesRole && matchesDistrict;
     
-    if (filter === "all") return matchesSearch;
-    if (filter === "pending") return matchesSearch && g.status === "PENDING";
-    if (filter === "replied") return matchesSearch && (g.status === "REPLAY" || g.reply) && g.status !== "CLOSED";
-    if (filter === "closed") return matchesSearch && g.status === "CLOSED";
-    return matchesSearch;
+    if (filter === "all") return matchesBase;
+    if (filter === "pending") return matchesBase && g.status === "PENDING";
+    if (filter === "replied") return matchesBase && (g.status === "REPLAY" || g.reply) && g.status !== "CLOSED";
+    if (filter === "closed") return matchesBase && g.status === "CLOSED";
+    return matchesBase;
   });
+
+  const pendingCount = grievances.filter(grievance => grievance.status === "PENDING").length;
+  const repliedCount = grievances.filter(grievance => (grievance.status === "REPLAY" || grievance.reply) && grievance.status !== "CLOSED").length;
+  const closedCount = grievances.filter(grievance => grievance.status === "CLOSED").length;
+  const grievanceRoles = Array.from(new Set(grievances.map(grievance => grievance.role).filter(Boolean))).sort();
+  const grievanceDistricts = Array.from(new Set(grievances.map(grievance => grievance.district?.name || grievance.districtName || grievance.location).filter(Boolean))).sort();
 
   if (loading) {
     return (
@@ -127,107 +140,78 @@ export default function AdminGrievancePage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-800">Grievance Management</h1>
-          <p className="text-slate-500">Review and respond to complaints from students, coaches, and referees.</p>
-        </div>
-      </div>
+      {/* Header */}
+      <section className="overflow-hidden rounded-2xl border border-orange-100 bg-[linear-gradient(120deg,#fffaf5_0%,#ffffff_58%,#ffe9df_100%)] px-5 py-5 shadow-sm sm:px-7">
+        <div className="flex items-center gap-4"><span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-orange-100 text-[#ff6b00] shadow-sm"><MessageSquare size={27} /></span><div><p className="text-xs font-semibold text-slate-400">Dashboard / Grievances</p><h1 className="mt-1 text-3xl font-black tracking-tight text-[#ff6b00]">Grievance Management</h1><p className="mt-1 text-sm text-slate-500">Review and respond to complaints from students, coaches and referees.</p></div></div>
+      </section>
 
-      <div className="flex flex-col md:flex-row gap-4">
-        <div className="relative flex-grow">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-          <input
-            type="text"
-            placeholder="Search by name, ID, or subject..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-brand-orange/20 outline-none transition-all"
-          />
-        </div>
-        <div className="flex bg-white p-1 rounded-2xl border border-slate-200 ">
-          {["all", "pending", "replied", "closed"].map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-6 py-2 rounded-xl font-bold capitalize transition-all cursor-pointer ${
-                filter === f ? "bg-[#FF7400] text-white shadow-lg shadow-orange-500/20" : "text-slate-500 hover:bg-slate-50"
-              }`}
-            >
-              {f}
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* Stats */}
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: "Total Grievances", value: grievances.length, icon: FileText, wrap: "border-orange-200 bg-orange-50/70", iconStyle: "bg-orange-100 text-orange-600" },
+          { label: "Pending", value: pendingCount, icon: Clock, wrap: "border-amber-200 bg-amber-50/70", iconStyle: "bg-amber-100 text-amber-600" },
+          { label: "Replied", value: repliedCount, icon: Reply, wrap: "border-emerald-200 bg-emerald-50/70", iconStyle: "bg-emerald-100 text-emerald-600" },
+          { label: "Closed", value: closedCount, icon: CheckCircle2, wrap: "border-blue-200 bg-blue-50/70", iconStyle: "bg-blue-100 text-blue-600" },
+        ].map((stat, index) => {
+          const Icon = stat.icon;
+          return <motion.div key={stat.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * .05 }} className={`flex items-center gap-4 rounded-2xl border p-5 shadow-sm ${stat.wrap}`}><span className={`grid size-14 shrink-0 place-items-center rounded-full ${stat.iconStyle}`}><Icon size={25} /></span><div className="min-w-0"><p className="text-xs font-semibold text-slate-500">{stat.label}</p><p className="mt-1 text-3xl font-black leading-none text-[#111b3a]">{stat.value}</p></div></motion.div>;
+        })}
+      </section>
 
-      <div className="grid grid-cols-1 gap-4">
+      {/* Filters */}
+      <section className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[minmax(260px,1fr)_170px_190px_auto]">
+        <label className="flex items-center gap-2 rounded-xl bg-slate-50 px-3.5 py-2.5 ring-1 ring-inset ring-slate-100 focus-within:ring-orange-200"><Search size={17} className="text-slate-400" /><input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search by name, ID, subject or grievance..." className="w-full bg-transparent text-sm font-medium text-slate-700 outline-none placeholder:text-slate-400" /></label>
+        <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-600 outline-none focus:border-orange-300"><option value="ALL">All Roles</option>{grievanceRoles.map(role => <option key={role} value={role}>{String(role).replaceAll("_", " ")}</option>)}</select>
+        <select value={districtFilter} onChange={(event) => setDistrictFilter(event.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-600 outline-none focus:border-orange-300"><option value="ALL">All Districts</option>{grievanceDistricts.map(district => <option key={district} value={district}>{district}</option>)}</select>
+        <button onClick={() => { setSearchTerm(""); setFilter("all"); setRoleFilter("ALL"); setDistrictFilter("ALL"); }} className="inline-flex items-center justify-center gap-2 rounded-xl border border-orange-200 px-4 py-2.5 text-xs font-extrabold text-[#ff6b00] transition hover:bg-orange-50"><RotateCcw size={15} />Reset</button>
+      </section>
+
+      {/* Status tabs */}
+      <section className="overflow-x-auto border-b border-slate-200">
+        <div className="flex min-w-max gap-1">{[
+          { id: "all", label: "All", count: grievances.length },
+          { id: "pending", label: "Pending", count: pendingCount },
+          { id: "replied", label: "Replied", count: repliedCount },
+          { id: "closed", label: "Closed", count: closedCount },
+        ].map(tab => <button key={tab.id} onClick={() => setFilter(tab.id)} className={`border-b-2 px-5 py-3 text-sm font-extrabold transition ${filter === tab.id ? "border-[#ff6b00] text-[#ff6b00]" : "border-transparent text-slate-400 hover:text-slate-700"}`}>{tab.label}<span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] ${filter === tab.id ? "bg-orange-50" : "bg-slate-100"}`}>{tab.count}</span></button>)}</div>
+      </section>
+
+      {/* Grievances table */}
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         {filteredGrievances.length === 0 ? (
-          <div className="bg-white rounded-[2rem] p-12 text-center border border-slate-100">
-            <div className="w-16 h-16 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mx-auto mb-4">
-              <MessageSquare size={32} />
-            </div>
-            <h3 className="text-xl font-bold text-slate-800">No grievances found</h3>
-            <p className="text-slate-500">All caught up! No complaints to show.</p>
-          </div>
+          <div className="flex min-h-80 flex-col items-center justify-center gap-3 text-center"><span className="grid size-16 place-items-center rounded-full bg-slate-50 text-slate-300"><MessageSquare size={29} /></span><div><h3 className="font-extrabold text-slate-600">No grievances found</h3><p className="mt-1 text-sm text-slate-400">Try changing your filters or search term.</p></div></div>
         ) : (
-          filteredGrievances.map((g) => (
-            <motion.div
-              layoutId={g.id}
-              key={g.id}
-              onClick={() => {
-                setSelectedGrievance(g);
-                setReplyText(g.reply || "");
-                setRemarkText(g.remark || "");
-              }}
-              className="bg-white rounded-3xl p-6 border border-slate-200 hover:shadow-xl hover:border-brand-orange/20 transition-all cursor-pointer group"
-            >
-              <div className="flex flex-col md:flex-row justify-between gap-4">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-3">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${
-                      g.role === "PLAYER" ? "bg-purple-100 text-purple-600" : 
-                      g.role === "COACH" ? "bg-orange-100 text-brand-orange" : "bg-emerald-100 text-emerald-600"
-                    }`}>
-                      {g.role}
-                    </span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${
-                      g.status === "PENDING" ? "bg-amber-100 text-amber-600" :
-                      g.status === "CLOSED" ? "bg-red-100 text-red-600" :
-                      "bg-green-100 text-green-600"
-                    }`}>
-                      {g.status === "REPLAY" ? "REPLIED" : g.status}
-                    </span>
-                  </div>
-                  <h3 className="text-xl font-bold text-slate-800 group-hover:text-brand-orange transition-colors">{g.subject}</h3>
-                  <div className="flex items-center gap-4 text-sm text-slate-500 flex-wrap">
-                    <span className="flex items-center gap-1.5 font-medium">
-                      <User size={16} />
-                      {g.userName} ({g.userId})
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <Clock size={16} />
-                      {new Date(g.createdAt).toLocaleDateString()}
-                    </span>
-                    {((g.images?.length > 0) || (g.documents?.length > 0)) && (
-                      <span className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full text-[10px] font-bold">
-                        <Paperclip size={11} />
-                        {(g.images?.length || 0) + (g.documents?.length || 0)} attachment{((g.images?.length || 0) + (g.documents?.length || 0)) > 1 ? "s" : ""}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center">
-                  <div className="p-3 bg-slate-50 rounded-2xl text-slate-400 group-hover:bg-orange-50 group-hover:text-[#FF7400] transition-all">
-                    <Reply size={24} />
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          ))
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1120px] text-left text-xs">
+              <thead className="border-b border-slate-100 bg-[#f8fafc] text-slate-500"><tr><th className="w-14 px-5 py-4 font-bold">#</th><th className="px-3 py-4 font-bold">Grievance Details</th><th className="px-3 py-4 font-bold">Raised By</th><th className="px-3 py-4 font-bold">Role</th><th className="px-3 py-4 font-bold">Location</th><th className="px-3 py-4 font-bold">Date</th><th className="px-3 py-4 font-bold">Status</th><th className="px-3 py-4 font-bold">Actions</th></tr></thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredGrievances.map((grievance, index) => {
+                  const location = grievance.district?.name || grievance.districtName || grievance.location || "—";
+                  const replied = (grievance.status === "REPLAY" || grievance.reply) && grievance.status !== "CLOSED";
+                  const displayStatus = grievance.status === "CLOSED" ? "Closed" : replied ? "Replied" : "Pending";
+                  const statusClass = displayStatus === "Closed" ? "bg-slate-100 text-slate-600" : displayStatus === "Replied" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700";
+                  const dotClass = displayStatus === "Closed" ? "bg-slate-500" : displayStatus === "Replied" ? "bg-emerald-500" : "bg-amber-500";
+                  const initials = String(grievance.userName || "U").split(" ").slice(0,2).map((part: string) => part.charAt(0)).join("").toUpperCase();
+                  const openGrievance = () => { setSelectedGrievance(grievance); setReplyText(grievance.reply || ""); setRemarkText(grievance.remark || ""); };
+                  return (
+                    <motion.tr key={grievance.id} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * .02 }} className="hover:bg-orange-50/20">
+                      <td className="px-5 py-4 font-black text-slate-500">{index + 1}</td>
+                      <td className="px-3 py-4"><div className="flex items-center gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-full bg-slate-100 font-black text-slate-500">{initials}</span><div className="min-w-0"><p className="max-w-[260px] truncate text-sm font-extrabold text-slate-800">{grievance.subject}</p><p className="mt-1 max-w-[270px] truncate text-[10px] text-slate-400">{grievance.description}</p></div></div></td>
+                      <td className="px-3 py-4"><div className="flex items-center gap-2"><span className="grid size-9 place-items-center rounded-full bg-slate-100 font-black text-slate-500">{initials}</span><div><p className="font-extrabold text-slate-700">{grievance.userName}</p><p className="mt-1 text-[10px] text-slate-400">{grievance.userId}</p></div></div></td>
+                      <td className="px-3 py-4"><span className="rounded-full bg-blue-50 px-2.5 py-1 font-extrabold text-blue-600">{String(grievance.role || "MEMBER").replaceAll("_", " ")}</span></td>
+                      <td className="px-3 py-4"><span className="inline-flex items-center gap-1.5 font-semibold text-slate-600"><MapPin size={14} className="text-slate-400" />{location}</span></td>
+                      <td className="px-3 py-4"><p className="font-semibold text-slate-600">{new Date(grievance.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</p><p className="mt-1 text-[10px] text-slate-400">{new Date(grievance.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p></td>
+                      <td className="px-3 py-4"><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-extrabold ${statusClass}`}><span className={`size-2 rounded-full ${dotClass}`} />{displayStatus}</span></td>
+                      <td className="px-3 py-4"><div className="flex items-center gap-2"><button onClick={openGrievance} title="View grievance" className="grid size-9 place-items-center rounded-lg bg-slate-50 text-slate-600 transition hover:bg-blue-50 hover:text-blue-600"><Eye size={16} /></button>{grievance.status !== "CLOSED" && <button onClick={openGrievance} title="Reply" className="grid size-9 place-items-center rounded-lg bg-slate-50 text-slate-600 transition hover:bg-orange-50 hover:text-[#ff6b00]"><Reply size={16} /></button>}</div></td>
+                    </motion.tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
-      </div>
-
-      {/* Reply Modal */}
+        <div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-4 text-xs font-semibold text-slate-500 sm:flex-row sm:items-center sm:justify-between"><p>Showing {filteredGrievances.length ? 1 : 0} to {filteredGrievances.length} of {filteredGrievances.length} grievances</p><span className="grid size-9 place-items-center rounded-lg bg-[#ff6b00] font-black text-white">1</span></div>
+      </section>
       <AnimatePresence>
         {selectedGrievance && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

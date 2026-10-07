@@ -308,7 +308,7 @@ export default function DashboardLayout({
       {/* Sidebar */}
       <aside
         className={`
-          fixed md:relative z-50 h-screen transition-all duration-300 bg-white border-r border-slate-200 flex flex-col shadow-sm print:hidden
+          fixed md:relative z-50 h-screen transition-all duration-300 bg-gradient-to-b from-[#0B1D38] to-[#07172D] border-r border-white/10 flex flex-col shadow-xl print:hidden
           ${isSidebarOpen ? "translate-x-0 w-64" : "-translate-x-full md:translate-x-0 w-64 md:w-[72px]"}
         `}
       >
@@ -352,10 +352,10 @@ export default function DashboardLayout({
                   : "/dashboard/member"
               }
               onClick={() => { if (window.innerWidth < 768) setIsSidebarOpen(false); }}
-              className={`block text-sm font-bold pb-2 border-b-2 transition-opacity hover:opacity-75 ${
+              className={`block text-sm font-bold pb-2 border-b border-white/10 transition-opacity hover:opacity-75 ${
                 pathname === "/dashboard/admin/profile" || pathname === "/dashboard/player/profile" || pathname === "/dashboard/member"
-                  ? "text-[#FF7400] border-[#FF7400]"
-                  : "text-[#FF7400] border-[#FF7400]"
+                  ? "text-orange-400"
+                  : "text-slate-300"
               }`}
             >
               Personal Details
@@ -366,7 +366,7 @@ export default function DashboardLayout({
         {/* Nav section */}
         <nav className="flex-grow px-3 pt-2 overflow-y-auto pb-24 scrollbar-hide">
           {isSidebarOpen && (
-            <p className="text-sm font-bold text-slate-800 px-2 pb-3">Dashboard</p>
+            <p className="text-sm font-bold text-slate-300 px-2 pb-3">Dashboard</p>
           )}
           <div className="space-y-1">
             {currentNavItems
@@ -388,39 +388,37 @@ export default function DashboardLayout({
                         setOpenDropdown(isDropdownOpen ? `${item.name}_closed` : item.name);
                       }}
                       className={`w-full flex items-center gap-3 px-2 py-2 rounded-xl transition-all ${
-                        isParentHighlighted ? "bg-orange-50" : "hover:bg-slate-50"
+                        isParentHighlighted ? "bg-gradient-to-r from-[#FF8A1F] to-[#FF6B35] shadow-[0_8px_20px_rgba(255,116,0,0.28)]" : "hover:bg-white/5"
                       }`}
                     >
                       <div
                         style={{
-                          backgroundColor: isParentHighlighted ? "#FF7400" : "#FFA726",
-                          boxShadow: isParentHighlighted
-                            ? "0 4px 10px rgba(255,116,0,0.3)"
-                            : "0 2px 6px rgba(255,167,38,0.25)",
+                          backgroundColor: "transparent",
+                          boxShadow: "none",
                         }}
                         className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all"
                       >
                         <item.icon size={17} color="#ffffff" />
                       </div>
                       <span className={`text-sm font-semibold flex-grow text-left ${
-                        isParentHighlighted ? "text-[#FF7400]" : "text-slate-700"
+                        isParentHighlighted ? "text-white" : "text-slate-200"
                       }`}>
                         {item.name}
                       </span>
                       <ChevronDown
                         size={14}
-                        className={`transition-transform duration-200 text-slate-400 ${isDropdownOpen ? "rotate-180" : ""}`}
+                        className={`transition-transform duration-200 ${isParentHighlighted ? "text-white" : "text-slate-400"} ${isDropdownOpen ? "rotate-180" : ""}`}
                       />
                     </button>
 
                     {isDropdownOpen && (
-                      <div className="ml-3 mt-0.5 pl-4 border-l-2 border-orange-100 space-y-0.5">
+                      <div className="ml-3 mt-0.5 pl-4 border-l border-white/10 space-y-0.5">
                         {children?.map(child => (
                           <Link
                             key={child.name}
                             href={child.href}
                             onClick={() => { if (window.innerWidth < 768) setIsSidebarOpen(false); }}
-                            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:text-[#FF7400] hover:bg-orange-50 transition-all"
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-slate-300 hover:text-white hover:bg-white/5 transition-all"
                           >
                             <div className="w-1.5 h-1.5 rounded-full bg-[#FFA726] shrink-0" />
                             {child.name}
@@ -439,16 +437,14 @@ export default function DashboardLayout({
                   onClick={() => { if (window.innerWidth < 768) setIsSidebarOpen(false); }}
                   className={`flex items-center gap-3 px-2 py-2 rounded-xl transition-all ${
                     isParentHighlighted
-                      ? "bg-orange-50"
-                      : "hover:bg-slate-50"
+                      ? "bg-gradient-to-r from-[#FF8A1F] to-[#FF6B35] shadow-[0_8px_20px_rgba(255,116,0,0.28)]"
+                      : "hover:bg-white/5"
                   } ${!isSidebarOpen ? "justify-center" : ""}`}
                 >
                   <div
                     style={{
-                      backgroundColor: isParentHighlighted ? "#FF7400" : "#FFA726",
-                      boxShadow: isParentHighlighted
-                        ? "0 4px 10px rgba(255,116,0,0.3)"
-                        : "0 2px 6px rgba(255,167,38,0.25)",
+                      backgroundColor: "transparent",
+                      boxShadow: "none",
                     }}
                     className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all"
                   >
@@ -457,7 +453,7 @@ export default function DashboardLayout({
                   {isSidebarOpen && (
                     <span
                       className={`text-sm font-semibold ${
-                        isParentHighlighted ? "text-[#FF7400]" : "text-slate-700"
+                        isParentHighlighted ? "text-white" : "text-slate-200"
                       }`}
                     >
                       {item.name}
@@ -470,26 +466,26 @@ export default function DashboardLayout({
         </nav>
 
         {/* Footer */}
-        <div className={`border-t border-slate-100 p-3 space-y-1 ${!isSidebarOpen ? "flex flex-col items-center" : ""}`}>
+        <div className={`border-t border-white/10 p-3 space-y-1 ${!isSidebarOpen ? "flex flex-col items-center" : ""}`}>
           {isSidebarOpen && (isPresident || isSecretary) && (
             <Link
               href="/dashboard/change-password"
-              className="flex items-center gap-3 px-2 py-2 text-slate-600 hover:bg-slate-50 hover:text-slate-800 rounded-xl transition-all"
+              className="flex items-center gap-3 px-2 py-2 text-slate-300 hover:bg-white/5 hover:text-white rounded-xl transition-all"
             >
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-slate-100">
-                <Settings size={17} className="text-slate-500" />
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-white/5">
+                <Settings size={17} className="text-slate-300" />
               </div>
               <span className="text-sm font-semibold">Change Password</span>
             </Link>
           )}
           <button
             onClick={handleLogout}
-            className={`flex items-center gap-3 px-2 py-2 text-slate-500 hover:bg-red-50 hover:text-red-500 rounded-xl transition-all ${
+            className={`flex items-center gap-3 px-2 py-2 text-slate-300 bg-white/5 border border-white/5 hover:bg-white/10 hover:text-white rounded-xl transition-all ${
               !isSidebarOpen ? "w-auto justify-center" : "w-full"
             }`}
           >
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-slate-100 hover:bg-red-100 transition-colors">
-              <LogOut size={17} className="text-slate-500 group-hover:text-red-500" />
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0">
+              <LogOut size={17} className="text-slate-300" />
             </div>
             {isSidebarOpen && <span className="text-sm font-semibold">Logout</span>}
           </button>
