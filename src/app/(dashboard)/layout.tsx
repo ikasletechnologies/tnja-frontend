@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, startTransition } from "react";
+import React, { useState, useEffect, startTransition, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
@@ -38,6 +38,7 @@ export default function DashboardLayout({
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const knownEditRequestIds = useRef<Set<string>>(new Set());
 
   // Profile dropdown & modal states
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
@@ -141,6 +142,7 @@ export default function DashboardLayout({
     socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        window.dispatchEvent(new CustomEvent("tnja:notification", { detail: data }));
         if (data.message) {
           showToast(data.message, "success");
           const newNotif = {
@@ -148,6 +150,7 @@ export default function DashboardLayout({
             message: data.message,
             createdAt: data.createdAt || new Date().toISOString(),
             read: false,
+            actionUrl: data.actionUrl || (data.type === "PROFILE_EDIT_REQUEST" ? "/dashboard/member#profile-edit-requests" : undefined),
           };
           setNotifications(prev => {
             const updated = [newNotif, ...prev];
@@ -171,6 +174,50 @@ export default function DashboardLayout({
       socket.close();
     };
   }, []);
+
+  // Profile-edit requests are also polled so coaches still receive an alert when
+  // WebSocket delivery is unavailable or they sign in after the request was sent.
+  useEffect(() => {
+    if (userRole !== "COACH") return;
+    let cancelled = false;
+    const loadEditRequests = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(`${API_BASE}/profile-edit-requests/coach`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok || cancelled) return;
+        const requests = await response.json();
+        if (!Array.isArray(requests)) return;
+        const pending = requests.filter((request: any) => request.status === "PENDING");
+        setNotifications((previous) => {
+          const storedIds = new Set(previous.map((item) => String(item.requestId || item.id)));
+          const incoming = pending
+            .filter((request: any) => !storedIds.has(String(request.id)))
+            .map((request: any) => ({
+              id: `profile-edit-${request.id}`,
+              requestId: request.id,
+              message: `${request.player?.fullName || "A player"} requested permission to edit their profile.`,
+              createdAt: request.createdAt || new Date().toISOString(),
+              read: false,
+              actionUrl: "/dashboard/member#profile-edit-requests",
+            }));
+          pending.forEach((request: any) => knownEditRequestIds.current.add(String(request.id)));
+          if (!incoming.length) return previous;
+          const updated = [...incoming, ...previous];
+          localStorage.setItem("tnja_notifications", JSON.stringify(updated));
+          return updated;
+        });
+      } catch {
+        // The WebSocket remains the primary notification channel.
+      }
+    };
+    loadEditRequests();
+    const interval = window.setInterval(loadEditRequests, 15000);
+    const onFocus = () => loadEditRequests();
+    window.addEventListener("focus", onFocus);
+    return () => { cancelled = true; window.clearInterval(interval); window.removeEventListener("focus", onFocus); };
+  }, [userRole, API_BASE]);
 
   if (!isMounted) return null;
 
@@ -549,11 +596,16 @@ export default function DashboardLayout({
                         </div>
                       ) : (
                         notifications.map(notif => (
-                          <div 
+                          <button 
                             key={notif.id}
+                            onClick={() => {
+                              saveNotifications(notifications.map(item => item.id === notif.id ? { ...item, read: true } : item));
+                              setIsNotifOpen(false);
+                              if (notif.actionUrl) router.push(notif.actionUrl);
+                            }}
                             className={`p-4 border-b border-slate-50 flex items-start gap-3 transition-colors ${
                               notif.read ? "bg-white" : "bg-orange-50/30"
-                            }`}
+                            } w-full hover:bg-slate-50`}
                           >
                             <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${notif.read ? "bg-transparent" : "bg-[#FF7400]"}`} />
                             <div className="flex-grow space-y-1 text-left">
@@ -564,7 +616,7 @@ export default function DashboardLayout({
                                 {new Date(notif.createdAt).toLocaleDateString()} {new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </span>
                             </div>
-                          </div>
+                          </button>
                         ))
                       )}
                     </div>

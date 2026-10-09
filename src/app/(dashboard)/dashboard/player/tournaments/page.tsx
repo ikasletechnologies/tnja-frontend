@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/set-state-in-effect, react-hooks/purity */
+
 import React, { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -23,6 +25,9 @@ import {
   Medal,
   Swords,
   X,
+  CalendarDays,
+  Plus,
+  RefreshCw,
 } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000/api";
@@ -72,8 +77,11 @@ export default function PlayerTournamentsPage() {
   const [categoryParticipants, setCategoryParticipants] = useState<any[]>([]);
   const [loadingParticipants, setLoadingParticipants] = useState(false);
   const [bracketModal, setBracketModal] = useState<{ isOpen: boolean; rounds: any[]; loading: boolean }>({ isOpen: false, rounds: [], loading: false });
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [levelFilter, setLevelFilter] = useState("ALL");
+  const [categoryFilter, setCategoryFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState("ALL");
   const [paying, setPaying] = useState<string | null>(null);
   const [playerData, setPlayerData] = useState<any>(null);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
@@ -176,7 +184,7 @@ export default function PlayerTournamentsPage() {
     } catch (err) {
       console.error("Failed to load tournaments", err);
     } finally {
-      setLoadingParticipants(false);
+      setLoading(false);
     }
   }, []);
 
@@ -363,12 +371,33 @@ export default function PlayerTournamentsPage() {
 
     // Filter by search query
     if (searchQuery) {
+      const query = searchQuery.toLowerCase();
       list = list.filter((t) =>
-        t.title.toLowerCase().includes(searchQuery.toLowerCase())
+        [t.title, t.location, t.category, t.club?.name]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(query))
       );
     }
+    if (levelFilter !== "ALL") list = list.filter((t) => (t.level || "CLUB") === levelFilter);
+    if (categoryFilter !== "ALL") list = list.filter((t) => (t.category || "N/A") === categoryFilter);
+    if (statusFilter === "OPEN") list = list.filter((t) => !t.registrationClosed && t.status !== "CLOSED");
+    if (statusFilter === "UPCOMING") list = list.filter((t) => new Date(t.date).getTime() > Date.now());
+    if (statusFilter === "COMPLETED") list = list.filter((t) => t.status === "CLOSED");
     return list;
   })();
+
+  const allTournaments = [...clubTournaments, ...districtMatches, ...zonalMatches, ...stateNationalMatches];
+  const registeredCount = allTournaments.filter((t) => t.myRegistration || t.myRegistrations?.length).length;
+  const completedCount = allTournaments.filter((t) => t.status === "CLOSED").length;
+  const upcomingCount = allTournaments.filter((t) => t.status !== "CLOSED" && new Date(t.date).getTime() >= Date.now()).length;
+  const categories = Array.from(new Set(allTournaments.map((t) => t.category).filter(Boolean)));
+
+  const resetFilters = () => {
+    setSearchQuery("");
+    setLevelFilter("ALL");
+    setCategoryFilter("ALL");
+    setStatusFilter("ALL");
+  };
 
   const emptyMessages: Record<Tab, string> = {
     club: "Your club has not created any tournaments yet.",
@@ -397,10 +426,13 @@ export default function PlayerTournamentsPage() {
       </AnimatePresence>
 
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-slate-800">Matches & Tournaments</h1>
-        <p className="text-slate-500 mt-1">View and register for tournaments at every level</p>
-      </div>
+      <section className="relative overflow-hidden rounded-2xl border border-orange-100 bg-gradient-to-r from-[#fff8ef] via-[#fff4e8] to-[#ffe9da] px-5 py-4 shadow-[0_8px_28px_rgba(255,116,0,0.07)]">
+        <div className="pointer-events-none absolute inset-y-0 right-8 hidden w-72 bg-[url('/homepage/whatjudo/judo1.png')] bg-contain bg-right bg-no-repeat opacity-[0.09] md:block" />
+        <div className="relative flex items-center gap-4">
+          <span className="grid h-11 w-11 place-items-center rounded-full bg-orange-100 text-[#ff6b1a]"><Trophy size={22} /></span>
+          <div><h1 className="text-xl font-extrabold text-[#ff6b1a]">Matches &amp; Tournaments</h1><p className="mt-1 text-[10px] font-medium text-slate-400">View and register for tournaments at every level. Stay updated with schedules, results and your participation.</p></div>
+        </div>
+      </section>
 
       {/* Membership gate */}
       {!isMemberPaid && (
@@ -417,12 +449,13 @@ export default function PlayerTournamentsPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
         {TABS.map((tab) => (
           <button
             key={tab.key}
             onClick={() => { setActiveTab(tab.key); setSearchQuery(""); }}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${
+            className={`flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-[11px] font-bold transition-all ${
               activeTab === tab.key
                 ? "bg-[#FF7400] text-white shadow-md shadow-[#FF7400]/30"
                 : "bg-white border border-slate-200 text-slate-600 hover:border-[#FF7400]/40 hover:text-[#FF7400]"
@@ -433,23 +466,26 @@ export default function PlayerTournamentsPage() {
           </button>
         ))}
       </div>
-
-      {/* Tab description */}
-      <p className="text-sm text-slate-400 -mt-2">
-        {TABS.find((t) => t.key === activeTab)?.desc}
-      </p>
-
-      {/* Search */}
-      <div className="relative w-full max-w-md">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search tournaments..."
-          className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 transition-all"
-        />
+        <button onClick={() => document.getElementById("tournament-results")?.scrollIntoView({ behavior: "smooth" })} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#ff6b1a] px-4 py-2.5 text-[10px] font-bold text-white shadow-lg shadow-orange-200"><Plus size={14} /> Register / Join Tournament</button>
       </div>
+
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[
+          { label: "Total Tournaments", value: allTournaments.length, icon: CalendarDays, tone: "border-orange-100 bg-orange-50/60 text-orange-500" },
+          { label: "Registered", value: registeredCount, icon: CheckCircle2, tone: "border-emerald-100 bg-emerald-50/60 text-emerald-500" },
+          { label: "Completed", value: completedCount, icon: Trophy, tone: "border-blue-100 bg-blue-50/60 text-blue-500" },
+          { label: "Upcoming", value: upcomingCount, icon: Clock, tone: "border-violet-100 bg-violet-50/60 text-violet-500" },
+        ].map((stat) => <article key={stat.label} className={`flex items-center gap-3 rounded-2xl border p-4 ${stat.tone}`}><span className="grid h-11 w-11 place-items-center rounded-full bg-white/70"><stat.icon size={20} /></span><div><p className="text-[9px] font-semibold text-slate-400">{stat.label}</p><p className="text-xl font-black text-[#17213b]">{stat.value}</p><p className="text-[8px] font-semibold opacity-75">{allTournaments.length ? `${Math.round((stat.value / allTournaments.length) * 100)}% of total` : "No data yet"}</p></div></article>)}
+      </section>
+
+      {/* Filters */}
+      <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[1fr_120px_150px_135px_auto]">
+        <label className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} /><input type="search" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search tournaments by name, venue, or category..." className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-[10px] font-medium outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-50" /></label>
+        <select value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-semibold text-slate-600"><option value="ALL">All Levels</option><option value="CLUB">Club</option><option value="DISTRICT">District</option><option value="ZONE">Zonal</option><option value="STATE">State</option><option value="NATIONAL">National</option></select>
+        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-semibold text-slate-600"><option value="ALL">All Categories</option>{categories.map((category) => <option key={category} value={category}>{category}</option>)}</select>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-semibold text-slate-600"><option value="ALL">All Status</option><option value="OPEN">Registration Open</option><option value="UPCOMING">Upcoming</option><option value="COMPLETED">Completed</option></select>
+        <button onClick={resetFilters} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-[#ff6b1a] bg-white px-4 text-[10px] font-bold text-[#ff6b1a]"><RefreshCw size={13} /> Reset</button>
+      </section>
 
       {/* Tournament Cards */}
       {loading ? (
@@ -465,7 +501,7 @@ export default function PlayerTournamentsPage() {
           <p className="text-slate-400 text-sm mt-2">{emptyMessages[activeTab]}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div id="tournament-results" className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           <AnimatePresence mode="wait">
             {currentList.map((tournament) => {
               const myRegs = tournament.myRegistrations || (tournament.myRegistration ? [tournament.myRegistration] : []);
