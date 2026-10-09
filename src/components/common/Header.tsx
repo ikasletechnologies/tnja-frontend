@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -119,9 +119,7 @@ const Header = () => {
                 alt="TNJA Logo" 
                 width={100} 
                 height={100} 
-                priority
-                loading="eager"
-                sizes="(max-width: 768px) 100vw, 100px"
+                sizes="100px"
                 className={`w-auto ${isRegisterLanding ? "h-12 md:h-14" : "h-12 md:h-16"} object-contain transition-transform group-hover:scale-105`}
               />
               <span className="block xl:hidden text-[9px] xs:text-[10px] sm:text-sm font-[900] text-[#FF7400] tracking-wider leading-tight uppercase whitespace-nowrap">
@@ -353,3 +351,4 @@ const Header = () => {
 };
 
 export default Header;
+

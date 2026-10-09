@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
@@ -233,7 +233,6 @@ const PhilosophyCarousel = () => {
                     alt="Active Profile"
                     fill
                     className="object-cover"
-                    priority
                   />
                   {/* Bottom White Fade Gradient */}
                   <div className="absolute bottom-0 left-0 w-full h-[100px] bg-gradient-to-t from-white to-transparent" />
@@ -290,3 +289,4 @@ const PhilosophyCarousel = () => {
 };
 
 export default PhilosophyCarousel;
+

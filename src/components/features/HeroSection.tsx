@@ -1,16 +1,8 @@
-"use client";
-
-import Image from "next/image";
-import { ChevronRight, ArrowDown } from "lucide-react";
+﻿import Image from "next/image";
+import { ChevronRight } from "lucide-react";
+import ScrollDownButton from "./ScrollDownButton";
 
 const HeroSection = () => {
-  const handleScrollDown = () => {
-    const heroSection = document.getElementById('hero-section');
-    if (heroSection && heroSection.nextElementSibling) {
-      heroSection.nextElementSibling.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
-
   return (
     <section id="hero-section" className="relative w-full bg-[#fafafa] overflow-hidden pt-5 pb-4 px-4 md:px-8">
       {/* Background Decor */}
@@ -88,9 +80,9 @@ const HeroSection = () => {
                   src="/homepage/kano.png"
                   alt="Dr. Jigoro Kano"
                   fill
-                  sizes="(max-width: 768px) 100vw, 400px"
+                  sizes="(max-width: 1023px) 340px, 350px"
                   className="object-cover"
-                  priority
+                  preload
                 />
               </div>
             </div>
@@ -146,20 +138,11 @@ const HeroSection = () => {
         </div>
 
         {/* Scroll Down */}
-        <button
-          onClick={handleScrollDown}
-          className="mt-8 mb-4 flex flex-col items-center gap-3 group focus:outline-none"
-        >
-          <span className="text-[#FF7400] text-sm font-semibold tracking-widest uppercase transition-colors group-hover:text-[#e66800]">
-            Scroll Down
-          </span>
-          <div className="w-10 h-10 rounded-full border border-[#FF7400]/40 flex items-center justify-center text-[#FF7400] transition-colors group-hover:bg-[#FF7400] group-hover:text-white">
-            <ArrowDown className="w-5 h-5" />
-          </div>
-        </button>
+        <ScrollDownButton />
       </div>
     </section>
   );
 };
 
 export default HeroSection;
+

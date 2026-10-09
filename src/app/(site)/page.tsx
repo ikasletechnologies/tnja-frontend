@@ -1,7 +1,6 @@
-import HeroSection from "@/components/features/HeroSection";
+﻿import HeroSection from "@/components/features/HeroSection";
 import JudoJourneySection from "@/components/features/JudoJourneySection";
 import EventsSection from "@/components/features/EventsSection";
-import NewsMarquee from "@/components/features/NewsMarquee";
 import PhilosophySection from "@/components/features/PhilosophySection";
 import PhilosophyCarousel from "@/components/features/PhilosophyCarousel";
 import TalentedPlayers from "@/components/features/TalentedPlayers";
@@ -24,33 +23,33 @@ export default function Home() {
           }}
         />
         <HeroSection />
-        <JudoJourneySection />
-        <EventsSection />
+        <div className="homepage-deferred"><JudoJourneySection /></div>
+        <div className="homepage-deferred"><EventsSection /></div>
       </div>
 
       <div className="flex flex-col w-full">
         {/* Philosophy Carousel: md:1st, mobile:4th (directly above TalentedPlayers) */}
-        <div className="order-4 md:order-1">
+        <div className="homepage-deferred order-4 md:order-1">
           <PhilosophyCarousel />
         </div>
 
         {/* Philosophy Numbered Cards: md:2nd, mobile:1st */}
-        <div className="order-1 md:order-2">
+        <div className="homepage-deferred order-1 md:order-2">
           <PhilosophySection />
         </div>
 
         {/* VisionMission: md:3rd, mobile:2nd */}
-        <div className="order-2 md:order-3">
+        <div className="homepage-deferred order-2 md:order-3">
           <VisionMission />
         </div>
 
         {/* TalentedCoaches: md:4th, mobile:3rd */}
-        <div className="order-3 md:order-4">
+        <div className="homepage-deferred order-3 md:order-4">
           <TalentedCoaches />
         </div>
 
         {/* TalentedPlayers: md:5th, mobile:5th */}
-        <div className="order-5 md:order-5">
+        <div className="homepage-deferred order-5 md:order-5">
           <TalentedPlayers />
         </div>
       </div>
@@ -60,3 +59,4 @@ export default function Home() {
     </main>
   );
 }
+

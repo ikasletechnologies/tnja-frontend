@@ -117,6 +117,12 @@ function ApprovalsContent() {
   const [selectedItem, setSelectedItem] = useState<Application | null>(null);
   const [remark, setRemark] = useState("");
   const [applications, setApplications] = useState<Application[]>([]);
+  const [statusCounts, setStatusCounts] = useState<Record<StatusType, number>>({
+    PENDING: 0,
+    APPROVED: 0,
+    REJECTED: 0,
+    REPLAY: 0,
+  });
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
@@ -148,12 +154,22 @@ function ApprovalsContent() {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE}/applications/pending?type=${activeTab}&status=${activeStatus}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const json = await res.json();
-      const raw: any[] = json.data || [];
-      setApplications(raw.map((r) => resolveApplication(r, activeTab)));
+      const statuses: StatusType[] = ["PENDING", "APPROVED", "REJECTED", "REPLAY"];
+      const responses = await Promise.all(
+        statuses.map(async (status) => {
+          const res = await fetch(`${API_BASE}/applications/pending?type=${activeTab}&status=${status}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) throw new Error(`Failed to load ${status.toLowerCase()} applications`);
+          const json = await res.json();
+          return [status, Array.isArray(json.data) ? json.data : []] as const;
+        })
+      );
+      const applicationsByStatus = Object.fromEntries(responses) as Record<StatusType, Parameters<typeof resolveApplication>[0][]>;
+      setStatusCounts(
+        Object.fromEntries(responses.map(([status, items]) => [status, items.length])) as Record<StatusType, number>
+      );
+      setApplications(applicationsByStatus[activeStatus].map((item) => resolveApplication(item, activeTab)));
     } catch {
       showToast("Failed to load applications. Is the backend running?", "error");
     } finally {
@@ -354,10 +370,10 @@ function ApprovalsContent() {
           {/* Summary */}
           <section className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
             {[
-              { label: statusTabs.find((item) => item.id === activeStatus)?.label || "Results", value: applications.length, icon: Users, wrap: "bg-orange-50 border-orange-100", iconStyle: "bg-orange-100 text-orange-600" },
-              { label: "Approved view", value: activeStatus === "APPROVED" ? applications.length : 0, icon: CheckCircle2, wrap: "bg-emerald-50/70 border-emerald-100", iconStyle: "bg-emerald-100 text-emerald-600" },
-              { label: "Denied view", value: activeStatus === "REJECTED" ? applications.length : 0, icon: XCircle, wrap: "bg-red-50/70 border-red-100", iconStyle: "bg-red-100 text-red-500" },
-              { label: "Replay requests", value: activeStatus === "REPLAY" ? applications.length : 0, icon: RefreshCw, wrap: "bg-blue-50/70 border-blue-100", iconStyle: "bg-blue-100 text-blue-600" },
+              { label: "Pending Approval", value: statusCounts.PENDING, icon: Users, wrap: "bg-orange-50 border-orange-100", iconStyle: "bg-orange-100 text-orange-600" },
+              { label: "Approved view", value: statusCounts.APPROVED, icon: CheckCircle2, wrap: "bg-emerald-50/70 border-emerald-100", iconStyle: "bg-emerald-100 text-emerald-600" },
+              { label: "Denied view", value: statusCounts.REJECTED, icon: XCircle, wrap: "bg-red-50/70 border-red-100", iconStyle: "bg-red-100 text-red-500" },
+              { label: "Replay requests", value: statusCounts.REPLAY, icon: RefreshCw, wrap: "bg-blue-50/70 border-blue-100", iconStyle: "bg-blue-100 text-blue-600" },
             ].map((card) => {
               const Icon = card.icon;
               return (
