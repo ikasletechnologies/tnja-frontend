@@ -115,8 +115,14 @@ export default function AdminDashboard() {
           fetch(`${API_BASE}/events`, { headers }).catch(() => null),
         ]);
 
-        if (statsResponse.status === 401 || profileResponse.status === 401) {
+        const sessionIsInvalid = [statsResponse.status, profileResponse.status]
+          .some((status) => status === 401 || status === 403);
+
+        if (sessionIsInvalid) {
           localStorage.removeItem("token");
+          localStorage.removeItem("userRole");
+          localStorage.removeItem("userName");
+          localStorage.removeItem("userStatus");
           router.replace("/login");
           return;
         }
