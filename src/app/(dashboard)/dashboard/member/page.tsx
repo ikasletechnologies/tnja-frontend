@@ -23,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 import { motion } from "framer-motion";
+import CoachDashboard from "./CoachDashboard";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000/api";
 
@@ -63,15 +64,11 @@ function MemberDashboardContent() {
         // Keep the currently rendered requests and retry on the next interval.
       }
     };
-    const onNotification = () => refreshRequests();
-    const interval = window.setInterval(refreshRequests, 10000);
+    const onNotification = () => void refreshRequests();
     window.addEventListener("tnja:notification", onNotification);
-    window.addEventListener("focus", onNotification);
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
       window.removeEventListener("tnja:notification", onNotification);
-      window.removeEventListener("focus", onNotification);
     };
   }, [userRole]);
 
@@ -268,6 +265,10 @@ function MemberDashboardContent() {
   }
 
   const needsPayment = !memberData.isPaid;
+
+  if (userRole === "COACH" && !needsPayment) {
+    return <CoachDashboard profile={memberData} editRequests={editRequests} processingRequestId={processingRequestId} onReview={handleEditRequestAction} />;
+  }
 
   const infoGroups = [
     {
@@ -470,6 +471,10 @@ function MemberDashboardContent() {
                         {req.player?.tempId || req.player?.permanentId || ""} &bull;{" "}
                         {new Date(req.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                       </p>
+                      {Array.isArray(req.requestedFields) && req.requestedFields.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">{req.requestedFields.map((field: string) => <span key={field} className="rounded-full bg-orange-100 px-2 py-1 text-[10px] font-bold text-orange-700">{field}</span>)}</div>
+                      )}
+                      {(req.reason || req.details) && <p className="mt-2 max-w-xl rounded-xl bg-white px-3 py-2 text-xs leading-relaxed text-slate-600 ring-1 ring-slate-200">{req.reason || req.details}</p>}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {req.status === "PENDING" ? (

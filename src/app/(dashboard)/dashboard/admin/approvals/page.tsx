@@ -123,6 +123,13 @@ function ApprovalsContent() {
     REJECTED: 0,
     REPLAY: 0,
   });
+  const [categoryCounts, setCategoryCounts] = useState<Record<ApprovalType, number>>({
+    CLUB: 0,
+    STUDENT: 0,
+    COACH: 0,
+    MEMBER: 0,
+    EVENT: 0,
+  });
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
@@ -177,9 +184,33 @@ function ApprovalsContent() {
     }
   }, [activeTab, activeStatus]);
 
+  const fetchCategoryCounts = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const approvalTypes: ApprovalType[] = ["CLUB", "STUDENT", "COACH", "MEMBER", "EVENT"];
+      const counts = await Promise.all(
+        approvalTypes.map(async (type) => {
+          const res = await fetch(`${API_BASE}/applications/pending?type=${type}&status=PENDING`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) throw new Error(`Failed to load ${type.toLowerCase()} pending count`);
+          const json = await res.json();
+          return [type, Array.isArray(json.data) ? json.data.length : 0] as const;
+        })
+      );
+      setCategoryCounts(Object.fromEntries(counts) as Record<ApprovalType, number>);
+    } catch {
+      showToast("Failed to refresh approval category counts.", "error");
+    }
+  }, []);
+
   useEffect(() => {
     fetchApplications();
   }, [fetchApplications]);
+
+  useEffect(() => {
+    void fetchCategoryCounts();
+  }, [fetchCategoryCounts]);
 
   const autoOpened = React.useRef(false);
   useEffect(() => {
@@ -206,7 +237,7 @@ function ApprovalsContent() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Approval failed");
       showToast(`${item.name} approved successfully!`, "success");
-      fetchApplications();
+      void Promise.all([fetchApplications(), fetchCategoryCounts()]);
     } catch (err: any) {
       showToast(err.message || "Something went wrong", "error");
     } finally {
@@ -240,7 +271,7 @@ function ApprovalsContent() {
       if (!res.ok) throw new Error(json.error || "Rejection failed");
       showToast(`${selectedItem.name} rejected.`, "success");
       setIsRejectModalOpen(false);
-      fetchApplications();
+      void Promise.all([fetchApplications(), fetchCategoryCounts()]);
     } catch (err: any) {
       showToast(err.message || "Something went wrong", "error");
     } finally {
@@ -273,7 +304,7 @@ function ApprovalsContent() {
       if (!res.ok) throw new Error(json.error || "Failed to request changes");
       showToast(`${selectedItem.name} asked for changes.`, "success");
       setIsRequestChangesModalOpen(false);
-      fetchApplications();
+      void Promise.all([fetchApplications(), fetchCategoryCounts()]);
     } catch (err: any) {
       showToast(err.message || "Something went wrong", "error");
     } finally {
@@ -359,7 +390,7 @@ function ApprovalsContent() {
                 >
                   <Icon size={18} className={isActive ? "text-[#ff6b00]" : "text-slate-400"} />
                   <span className="min-w-0 flex-1 truncate">{tab.label}</span>
-                  {isActive && <span className="grid size-7 place-items-center rounded-full bg-white text-[11px] font-black text-[#ff6b00]">{applications.length}</span>}
+                  <span className={`grid size-7 place-items-center rounded-full text-[11px] font-black ${isActive ? "bg-white text-[#ff6b00]" : categoryCounts[tab.id] > 0 ? "bg-orange-100 text-[#ff6b00]" : "bg-slate-50 text-slate-400"}`}>{categoryCounts[tab.id]}</span>
                 </button>
               );
             })}
@@ -418,7 +449,7 @@ function ApprovalsContent() {
               <button onClick={() => setNewestFirst((value) => !value)} className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-bold text-slate-600 transition hover:bg-slate-50">
                 <SlidersHorizontal size={15} /> {newestFirst ? "Newest First" : "Oldest First"}
               </button>
-              <button onClick={fetchApplications} className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-600 transition hover:border-orange-200 hover:text-[#ff6b00]">
+              <button onClick={() => void Promise.all([fetchApplications(), fetchCategoryCounts()])} className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-600 transition hover:border-orange-200 hover:text-[#ff6b00]">
                 <RefreshCw size={15} className={loading ? "animate-spin" : ""} /> Refresh
               </button>
             </div>

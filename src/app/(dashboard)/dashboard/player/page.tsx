@@ -49,6 +49,18 @@ const formatDate = (value?: string, fallback = "Not available") => {
 const valueOr = (value: unknown, fallback = "Not provided") =>
   value === null || value === undefined || value === "" ? fallback : String(value);
 
+const readApiResponse = async (response: Response): Promise<Record<string, unknown>> => {
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) return response.json();
+
+  await response.text();
+  return {
+    error: response.ok
+      ? "The server returned an invalid response."
+      : `The profile-edit service is unavailable (${response.status}).`,
+  };
+};
+
 function Detail({ icon: Icon, label, value }: { icon: typeof UserRound; label: string; value: unknown }) {
   return (
     <div className="flex min-w-0 items-start gap-2.5">
@@ -112,6 +124,9 @@ export default function PlayerDashboard() {
   const [error, setError] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [requestingEdit, setRequestingEdit] = useState(false);
+  const [isEditRequestModalOpen, setIsEditRequestModalOpen] = useState(false);
+  const [editRequestReason, setEditRequestReason] = useState("");
+  const [requestedFields, setRequestedFields] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [paying, setPaying] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
@@ -209,15 +224,34 @@ export default function PlayerDashboard() {
   ], [player, upcomingEvents]);
 
   const requestProfileEdit = async () => {
+    const coachId = player?.coach?.id || player?.coachId;
+    if (!player?.id || !coachId) {
+      alert("An assigned coach is required before requesting a profile edit.");
+      return;
+    }
+    if (requestedFields.length === 0) {
+      alert("Select at least one profile field that you need to edit.");
+      return;
+    }
+    if (editRequestReason.trim().length < 10) {
+      alert("Please enter a clear reason with at least 10 characters.");
+      return;
+    }
+
     setRequestingEdit(true);
     try {
       const response = await fetch(`${API_BASE}/profile-edit-requests`, {
         method: "POST",
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ playerId: player.id, coachId, requestedFields, reason: editRequestReason.trim(), details: editRequestReason.trim() }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Unable to send the request.");
-      setEditRequest({ id: data.id, status: "PENDING" });
+      const data = await readApiResponse(response);
+      if (!response.ok) throw new Error(typeof data.error === "string" ? data.error : "Unable to send the request.");
+      if (typeof data.id !== "string") throw new Error("The server did not create an approval request.");
+      setEditRequest({ id: data.id, status: typeof data.status === "string" ? data.status : "PENDING" });
+      setIsEditRequestModalOpen(false);
+      setEditRequestReason("");
+      setRequestedFields([]);
     } catch (reason) {
       alert(reason instanceof Error ? reason.message : "Unable to send the request.");
     } finally {
@@ -231,7 +265,7 @@ export default function PlayerDashboard() {
       const response = await fetch(`${API_BASE}/auth/profile`, {
         method: "PUT",
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}`, "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, profileEditRequestId: editRequest?.id }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Unable to update your profile.");
@@ -268,9 +302,11 @@ export default function PlayerDashboard() {
       });
       const order = await response.json();
       if (!response.ok) throw new Error(order.error || "Unable to create the payment order.");
+      const razorpayKey = order.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
+      if (!razorpayKey) throw new Error("Payment service is not configured. Please contact the administrator.");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       new (window as any).Razorpay({
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        key: razorpayKey,
         amount: order.amount,
         currency: order.currency,
         name: "Tamil Nadu Judo Association",
@@ -312,8 +348,8 @@ export default function PlayerDashboard() {
   ) : null;
 
   return (
-    <main className="min-h-full bg-[radial-gradient(circle_at_top_left,#fff7ed_0,transparent_30%),linear-gradient(180deg,#f8fbff_0%,#f4f7fb_100%)] p-4 sm:p-6 lg:p-8">
-      <div className="mx-auto max-w-[1400px] space-y-4">
+    <main className="min-h-full bg-[radial-gradient(circle_at_top_left,#fff7ed_0,transparent_30%),linear-gradient(180deg,#f8fbff_0%,#f4f7fb_100%)]">
+      <div className="mx-auto w-full max-w-[1400px] space-y-3 sm:space-y-4">
         <header>
           <h1 className="text-2xl font-extrabold tracking-tight text-[#14213d] sm:text-3xl">Player Dashboard</h1>
           <p className="mt-0.5 text-xs font-medium text-slate-400">Welcome back, {firstName}! Here&apos;s your judo journey at a glance.</p>
@@ -335,7 +371,7 @@ export default function PlayerDashboard() {
                 <h2 className="truncate text-lg font-extrabold text-[#17213b]">{player.fullName}</h2>
                 <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[9px] font-extrabold uppercase text-emerald-600">{player.permanentId ? "Active member" : "Approved player"}</span>
               </div>
-              <p className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-slate-500"><CircleUserRound size={14} className="text-[#ff6b1a]" /> Player ID: {player.permanentId || player.tempId || "Pending"}</p>
+              <p className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 break-all text-xs font-semibold text-slate-500"><CircleUserRound size={14} className="text-[#ff6b1a]" /> Player ID: {player.permanentId || player.tempId || "Pending"}</p>
               {player.validUntil && <span className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[10px] font-bold text-emerald-600"><CalendarDays size={13} /> Valid until: {formatDate(player.validUntil)}</span>}
             </div>
             <div className="relative z-10 sm:self-start">
@@ -344,13 +380,13 @@ export default function PlayerDashboard() {
               ) : editRequest?.status === "APPROVED" ? (
                 <button onClick={() => setIsEditing(true)} className="inline-flex items-center gap-2 rounded-xl border border-[#ff6b1a] bg-white px-4 py-2 text-[10px] font-bold text-[#ff6b1a]"><Pencil size={13} /> Edit profile</button>
               ) : player.coach ? (
-                <button onClick={requestProfileEdit} disabled={requestingEdit} className="inline-flex items-center gap-2 rounded-xl border border-[#ff6b1a] bg-white px-4 py-2 text-[10px] font-bold text-[#ff6b1a] shadow-sm disabled:opacity-60">{requestingEdit ? <Loader2 size={13} className="animate-spin" /> : <Pencil size={13} />} Request profile edit</button>
+                <button onClick={() => setIsEditRequestModalOpen(true)} disabled={requestingEdit} className="inline-flex items-center gap-2 rounded-xl border border-[#ff6b1a] bg-white px-4 py-2 text-[10px] font-bold text-[#ff6b1a] shadow-sm disabled:opacity-60">{requestingEdit ? <Loader2 size={13} className="animate-spin" /> : <Pencil size={13} />} Request profile edit</button>
               ) : null}
             </div>
           </div>
         </section>
 
-        <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <section className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-4">
           {stats.map(({ label, value, icon: Icon, tone }) => {
             const colors: Record<string, string> = { emerald: "border-emerald-100 bg-emerald-50/60 text-emerald-500", rose: "border-rose-100 bg-rose-50/60 text-rose-500", slate: "border-slate-200 bg-white text-slate-500", blue: "border-blue-100 bg-blue-50/60 text-blue-500" };
             return <article key={label} className={`flex items-center gap-3 rounded-2xl border p-4 shadow-[0_8px_25px_rgba(15,23,42,0.03)] ${colors[tone]}`}><span className="grid h-10 w-10 place-items-center rounded-full bg-white/70"><Icon size={19} /></span><div><p className="text-[9px] font-extrabold uppercase tracking-wide opacity-80">{label}</p><p className="mt-0.5 text-xl font-black text-[#17213b]">{value}</p></div></article>;
@@ -379,11 +415,11 @@ export default function PlayerDashboard() {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2"><Detail icon={Mail} label="Email" value={player.email} /><Detail icon={Phone} label="Mobile Number" value={player.mobileNumber} /><Detail icon={MapPin} label="Address" value={player.address} /><Detail icon={Flag} label="City" value={player.city} /></div>
             </Panel>
             <Panel icon={UserRound} title="Physical Attributes" action={editAction}>
-              <div className="grid grid-cols-2 gap-4"><Detail icon={Award} label="Height (CM)" value={player.height} /><Detail icon={Scale} label="Weight (KG)" value={player.weight} /><Detail icon={UserRound} label="Gender" value={player.gender} /><Detail icon={Medal} label="Belt Grade" value={player.presentGradeInJudo || player.beltGrade || "Not assigned"} /></div>
+              <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2"><Detail icon={Award} label="Height (CM)" value={player.height} /><Detail icon={Scale} label="Weight (KG)" value={player.weight} /><Detail icon={UserRound} label="Gender" value={player.gender} /><Detail icon={Medal} label="Belt Grade" value={player.presentGradeInJudo || player.beltGrade || "Not assigned"} /></div>
             </Panel>
             <Panel icon={BriefcaseBusiness} title="Assigned Coach">
               {player.coach ? (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2">
                   <Detail icon={UserRound} label="Coach Name" value={player.coach.fullName} />
                   <Detail icon={IdCard} label="Coach ID" value={player.coach.permanentId || player.coach.tempId || player.coach.coachId} />
                   <Detail icon={Phone} label="Mobile Number" value={player.coach.mobileNumber || player.coach.phone} />
@@ -412,9 +448,41 @@ export default function PlayerDashboard() {
 
         <section className="grid gap-3 lg:grid-cols-[1fr_1.05fr]">
           <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#641f38] via-[#8428a8] to-[#6818d4] p-4 text-white shadow-lg shadow-violet-200/40"><div className="absolute -right-8 -top-16 h-48 w-48 rounded-full bg-white/10" /><div className="relative flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-orange-500"><CalendarDays size={19} /></span><div className="min-w-0 flex-1"><p className="text-[8px] uppercase tracking-widest text-white/60">Next tournament</p><p className="mt-1 truncate text-xs font-bold">{nextEvent?.title || "Explore upcoming championships"}</p><p className="mt-1 text-[9px] text-white/65">{nextEvent ? `${formatDate(nextEvent.date)} · ${nextEvent.location || "Venue TBA"}` : "Discover events open for registration"}</p></div><Link href="/dashboard/player/tournaments" className="grid h-8 w-8 place-items-center rounded-full bg-white text-violet-600"><ArrowRight size={15} /></Link></div></div>
-          <Panel icon={Sparkles} title="Quick Actions"><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{[{ href: "/dashboard/player/tournaments", icon: Trophy, label: "View tournaments", color: "orange" }, { href: "/dashboard/player/match-history", icon: Activity, label: "Match history", color: "blue" }, { href: "/dashboard/grievance", icon: Flag, label: "Raise grievance", color: "rose" }, { href: "/dashboard/player/profile", icon: UsersRound, label: "Edit profile", color: "emerald" }].map((item) => <Link key={item.label} href={item.href} className={`flex items-center justify-center gap-1.5 rounded-xl px-2 py-3 text-center text-[9px] font-bold ${item.color === "orange" ? "bg-orange-50 text-orange-600" : item.color === "blue" ? "bg-blue-50 text-blue-600" : item.color === "rose" ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"}`}><item.icon size={13} />{item.label}</Link>)}</div></Panel>
+          <Panel icon={Sparkles} title="Quick Actions"><div className="grid grid-cols-1 gap-2 sm:grid-cols-3">{[{ href: "/dashboard/player/tournaments", icon: Trophy, label: "View tournaments", color: "orange" }, { href: "/dashboard/player/match-history", icon: Activity, label: "Match history", color: "blue" }, { href: "/dashboard/grievance", icon: Flag, label: "Raise grievance", color: "rose" }].map((item) => <Link key={item.label} href={item.href} className={`flex items-center justify-center gap-1.5 rounded-xl px-2 py-3 text-center text-[9px] font-bold ${item.color === "orange" ? "bg-orange-50 text-orange-600" : item.color === "blue" ? "bg-blue-50 text-blue-600" : item.color === "rose" ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"}`}><item.icon size={13} />{item.label}</Link>)}</div></Panel>
         </section>
       </div>
+
+      {isEditRequestModalOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget && !requestingEdit) setIsEditRequestModalOpen(false); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="profile-edit-request-title" className="w-full max-w-xl overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <header className="flex items-start justify-between gap-4 border-b border-orange-100 bg-gradient-to-r from-orange-50 to-white p-6">
+              <div className="flex gap-3">
+                <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-orange-100 text-[#ff6b1a]"><Pencil size={20} /></span>
+                <div><h2 id="profile-edit-request-title" className="text-lg font-extrabold text-[#17213b]">Profile edit application</h2><p className="mt-1 text-xs leading-relaxed text-slate-500">Select the details you need to change. This application will be sent to <strong>{player.coach?.fullName || "your assigned coach"}</strong> for approval.</p></div>
+              </div>
+              <button type="button" onClick={() => setIsEditRequestModalOpen(false)} disabled={requestingEdit} aria-label="Close" className="rounded-xl p-2 text-slate-400 transition hover:bg-white hover:text-slate-700 disabled:opacity-50"><X size={18} /></button>
+            </header>
+
+            <div className="max-h-[70vh] space-y-5 overflow-y-auto p-6">
+              <div>
+                <p className="text-xs font-extrabold text-slate-700">Which details do you want to edit? <span className="text-red-500">*</span></p>
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {["Personal details", "Contact details", "Address", "Physical details", "Judo details", "Profile photo"].map((field) => {
+                    const selected = requestedFields.includes(field);
+                    return <button key={field} type="button" onClick={() => setRequestedFields((current) => selected ? current.filter((item) => item !== field) : [...current, field])} className={`rounded-xl border px-3 py-3 text-left text-xs font-bold transition ${selected ? "border-orange-400 bg-orange-50 text-orange-700 ring-2 ring-orange-100" : "border-slate-200 bg-white text-slate-600 hover:border-orange-200"}`}><span className={`mr-2 inline-grid size-4 place-items-center rounded border text-[10px] ${selected ? "border-orange-500 bg-orange-500 text-white" : "border-slate-300"}`}>{selected ? "✓" : ""}</span>{field}</button>;
+                  })}
+                </div>
+              </div>
+
+              <label className="block"><span className="text-xs font-extrabold text-slate-700">Reason and required changes <span className="text-red-500">*</span></span><textarea value={editRequestReason} onChange={(event) => setEditRequestReason(event.target.value)} rows={5} maxLength={500} placeholder="Example: My mobile number and address have changed. Please allow me to update them..." className="mt-2 w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-300 focus:bg-white focus:ring-4 focus:ring-orange-100" /><span className="mt-1 block text-right text-[10px] font-medium text-slate-400">{editRequestReason.length}/500</span></label>
+
+              <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4"><p className="text-xs font-bold text-blue-800">Approval flow</p><p className="mt-1 text-[11px] leading-relaxed text-blue-700/80">Your assigned coach reviews this application. After approval, the Edit Profile option will be unlocked for you.</p></div>
+            </div>
+
+            <footer className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50/70 p-5"><button type="button" onClick={() => setIsEditRequestModalOpen(false)} disabled={requestingEdit} className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-bold text-slate-600 disabled:opacity-50">Cancel</button><button type="button" onClick={requestProfileEdit} disabled={requestingEdit || requestedFields.length === 0 || editRequestReason.trim().length < 10} className="inline-flex items-center gap-2 rounded-xl bg-[#ff6b1a] px-5 py-2.5 text-xs font-extrabold text-white shadow-lg shadow-orange-200 transition hover:bg-[#ed5b0c] disabled:cursor-not-allowed disabled:opacity-50">{requestingEdit ? <Loader2 size={15} className="animate-spin" /> : <FileCheck2 size={15} />}{requestingEdit ? "Submitting..." : "Submit to coach"}</button></footer>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

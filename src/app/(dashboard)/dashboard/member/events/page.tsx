@@ -13,7 +13,13 @@ import {
   Loader2,
   ChevronDown,
   Video,
-  User
+  User,
+  Trophy,
+  History,
+  Filter,
+  RotateCcw,
+  Star,
+  BarChart3
 } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000/api";
@@ -24,15 +30,25 @@ export default function MemberEventsPage() {
   const [loading, setLoading] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState("ALL");
+  const [districtFilter, setDistrictFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [districts, setDistricts] = useState<any[]>([]);
   const [userRole, setUserRole] = useState<string>("GUEST");
+  const canProposeEvent = [
+    "CLUB", "SUPER_ADMIN", "STATE_PRESIDENT", "STATE_SECRETARY",
+    "ZONE_PRESIDENT", "ZONE_SECRETARY", "DISTRICT_PRESIDENT",
+    "DISTRICT_SECRETARY", "CEO",
+  ].includes(userRole);
   const [userProfile, setUserProfile] = useState<any | null>(null);
   const [eventSections, setEventSections] = useState<string[]>([]);
   const [sectionOpen, setSectionOpen] = useState(false);
   const sectionRef = useRef<HTMLDivElement>(null);
   const [selectedEvent, setSelectedEvent] = useState<any | null>(null);
   
-  const [activeSection, setActiveSection] = useState<"active" | "mine">("active");
+  const [activeSection, setActiveSection] = useState<"active" | "mine" | "upcoming" | "past">("active");
   const [myEvents, setMyEvents] = useState<any[]>([]);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<any | null>(null);
@@ -391,10 +407,49 @@ export default function MemberEventsPage() {
     }
   };
 
-  const filteredEvents = events.filter(ev => {
-    if (searchQuery && !ev.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+  const now = new Date();
+  const nextThirtyDays = new Date(now);
+  nextThirtyDays.setDate(now.getDate() + 30);
+
+  const registeredEvents = events.filter((event) => event.registrations?.length > 0);
+  const upcomingEvents = events.filter((event) => {
+    const eventDate = new Date(event.date);
+    return eventDate >= now && eventDate <= nextThirtyDays;
+  });
+  const pastEvents = events.filter((event) => new Date(event.date) < now);
+  const eventTypes = Array.from(new Set(events.map((event) => event.eventSection || event.level).filter(Boolean)));
+  const eventDistricts = Array.from(new Set(events.map((event) => event.district?.name || event.location).filter(Boolean)));
+
+  const sectionEvents = activeSection === "mine"
+    ? registeredEvents
+    : activeSection === "upcoming"
+      ? upcomingEvents
+      : activeSection === "past"
+        ? pastEvents
+        : events.filter((event) => new Date(event.date) >= now);
+
+  const filteredEvents = sectionEvents.filter((event) => {
+    const eventDate = new Date(event.date);
+    const searchable = `${event.title || ""} ${event.location || ""} ${event.eventSection || ""}`.toLowerCase();
+    if (searchQuery && !searchable.includes(searchQuery.toLowerCase())) return false;
+    if (typeFilter !== "ALL" && (event.eventSection || event.level) !== typeFilter) return false;
+    if (districtFilter !== "ALL" && (event.district?.name || event.location) !== districtFilter) return false;
+    if (statusFilter === "OPEN" && event.registrations?.length) return false;
+    if (statusFilter === "REGISTERED" && !event.registrations?.length) return false;
+    if (startDate && eventDate < new Date(startDate)) return false;
+    if (endDate && eventDate > new Date(`${endDate}T23:59:59`)) return false;
     return true;
   });
+
+  const featuredEvent = events.find((event) => event.featured) || events[0];
+  const resetFilters = () => {
+    setSearchQuery("");
+    setTypeFilter("ALL");
+    setDistrictFilter("ALL");
+    setStatusFilter("ALL");
+    setStartDate("");
+    setEndDate("");
+  };
 
   return (
     <div className="space-y-8 relative">
@@ -415,247 +470,80 @@ export default function MemberEventsPage() {
         )}
       </AnimatePresence>
 
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-800">Events Directory</h1>
-          <p className="text-slate-500">View upcoming events or propose a new one</p>
-        </div>
-        {["CLUB", "SUPER_ADMIN", "STATE_PRESIDENT", "STATE_SECRETARY", "ZONE_PRESIDENT", "ZONE_SECRETARY", "DISTRICT_PRESIDENT", "DISTRICT_SECRETARY", "CEO"].includes(userRole) && (
-          <button 
-            onClick={() => {
-              setFormData({ title: "", date: "", location: "", description: "", level: "DISTRICT", participantType: "ALL", districtId: "", zoneId: "", isPaid: false, entryFee: "", color: "#FF7400", eventSection: "", meetingLink: "" });
-              setIsCreateModalOpen(true);
-            }}
-            className="flex items-center gap-2 px-6 py-4 bg-[#FF7400] text-white font-bold rounded-2xl shadow-lg shadow-[#FF7400]/20 hover:scale-105 active:scale-95 transition-all"
-          >
-            <Plus size={20} />
-            Propose Event
-          </button>
-        )}
-      </div>
-
-      {["CLUB", "SUPER_ADMIN", "STATE_PRESIDENT", "STATE_SECRETARY", "ZONE_PRESIDENT", "ZONE_SECRETARY", "DISTRICT_PRESIDENT", "DISTRICT_SECRETARY", "CEO"].includes(userRole) && (
-        <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl w-fit">
-          <button
-            onClick={() => setActiveSection("active")}
-            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all ${activeSection === "active" ? "bg-white text-[#FF7400] shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-          >
-            Active Events ({events.length})
-          </button>
-          <button
-            onClick={() => setActiveSection("mine")}
-            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all ${activeSection === "mine" ? "bg-white text-[#FF7400] shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-          >
-            My Proposed Events ({myEvents.length})
-          </button>
-        </div>
-      )}
-
-      {/* Filters & Search */}
-      <div className="relative w-full max-w-md">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-        <input 
-          type="text" 
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search active events..."
-          className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 transition-all"
-        />
-      </div>
-
-      {/* Events List */}
-      {activeSection === "active" && (
-        <>
-      {loading ? (
-        <div className="flex justify-center py-20">
-          <Loader2 size={40} className="animate-spin text-[#FF7400]" />
-        </div>
-      ) : filteredEvents.length === 0 ? (
-        <div className="text-center py-20 bg-white border border-slate-200 rounded-3xl">
-          <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
-            <Calendar size={32} />
+      {/* Directory hero */}
+      <section className="relative overflow-hidden rounded-2xl border border-orange-100 bg-gradient-to-r from-[#fff9f3] via-[#fff4e9] to-[#fff8f1] px-5 py-5 shadow-sm sm:px-7">
+        <div className="absolute -right-8 -top-20 size-64 rounded-full border-[28px] border-orange-100/50" />
+        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-orange-100 text-[#ff5a0a] shadow-sm"><Calendar size={28} /></span>
+            <div><h1 className="text-2xl font-black tracking-tight text-[#ff5a0a] sm:text-3xl">Events Directory</h1><p className="mt-1 text-sm font-medium text-slate-500">Discover active events, special programs, and association activities near you.</p></div>
           </div>
-          <h3 className="text-lg font-bold text-slate-500">No Active Events</h3>
-          <p className="text-slate-400 text-sm mt-2">There are currently no upcoming approved events.</p>
+          {canProposeEvent && <button onClick={() => setIsCreateModalOpen(true)} className="relative inline-flex items-center justify-center gap-2 rounded-xl bg-[#ff5a0a] px-5 py-3 text-sm font-extrabold text-white shadow-lg shadow-orange-500/20 transition hover:-translate-y-0.5 hover:bg-[#ee4f00]"><Plus size={18} />Propose Event</button>}
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {filteredEvents.map((event) => (
-            <motion.div 
-              key={event.id}
-              whileHover={{ y: -5 }}
-              onClick={() => setSelectedEvent(event)}
-              className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col group cursor-pointer"
-            >
-              <div className="h-32 bg-slate-100 relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-[#FF7400]/20 to-[#FFDA00]/20 group-hover:opacity-100 transition-opacity"></div>
-                <div className="absolute top-4 right-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold text-slate-800 shadow-sm flex items-center gap-2">
-                  <span>{event.level} LEVEL</span>
-                  <div className="w-1 h-1 bg-slate-300 rounded-full"></div>
-                  <span className="text-[#FF7400]">{event.participantType}</span>
-                </div>
-              </div>
+      </section>
 
-              <div className="p-8 -mt-10 relative flex-grow">
-                <div className="w-20 h-20 bg-white rounded-3xl shadow-xl flex items-center justify-center text-[#FF7400] mb-6 border border-slate-50">
-                  <Calendar size={32} />
-                </div>
+      {/* Event metrics */}
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: "Active Events", value: events.filter((event) => new Date(event.date) >= now).length, note: "available now", icon: Calendar, wrap: "border-orange-100 bg-orange-50/70", iconStyle: "bg-orange-100 text-orange-600" },
+          { label: "Registered", value: registeredEvents.length, note: "events joined", icon: User, wrap: "border-emerald-100 bg-emerald-50/70", iconStyle: "bg-emerald-100 text-emerald-600" },
+          { label: "Upcoming", value: upcomingEvents.length, note: "next 30 days", icon: Clock, wrap: "border-violet-100 bg-violet-50/70", iconStyle: "bg-violet-100 text-violet-600" },
+          { label: "Closed", value: pastEvents.length, note: "completed", icon: Trophy, wrap: "border-rose-100 bg-rose-50/70", iconStyle: "bg-rose-100 text-rose-500" },
+        ].map((metric) => { const Icon = metric.icon; return (
+          <div key={metric.label} className={`flex items-center gap-4 rounded-2xl border p-4 shadow-sm ${metric.wrap}`}><span className={`grid size-14 shrink-0 place-items-center rounded-full ${metric.iconStyle}`}><Icon size={27} /></span><div><p className="text-xs font-extrabold text-slate-500">{metric.label}</p><p className="text-3xl font-black leading-tight text-[#10244b]">{metric.value}</p><p className="text-xs font-semibold text-slate-400">{metric.note}</p></div></div>
+        ); })}
+      </section>
 
-                <h3 className="text-xl font-bold text-slate-800 mb-4 line-clamp-2 leading-tight">
-                  {event.title}
-                </h3>
+      {/* Filters */}
+      <section className="grid gap-2 lg:grid-cols-[minmax(240px,1.5fr)_150px_160px_150px_minmax(250px,1fr)_80px_80px]">
+        <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 shadow-sm focus-within:border-orange-300"><Search size={18} className="text-slate-400" /><input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search active events by name, venue, or category..." className="min-w-0 flex-1 bg-transparent text-xs font-medium text-slate-700 outline-none placeholder:text-slate-400" /></label>
+        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 outline-none"><option value="ALL">All Types</option>{eventTypes.map((type) => <option key={type} value={type}>{type}</option>)}</select>
+        <select value={districtFilter} onChange={(e) => setDistrictFilter(e.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 outline-none"><option value="ALL">All Districts</option>{eventDistricts.map((district) => <option key={district} value={district}>{district}</option>)}</select>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 outline-none"><option value="ALL">All Status</option><option value="OPEN">Open</option><option value="REGISTERED">Registered</option></select>
+        <div className="flex items-center rounded-xl border border-slate-200 bg-white px-2 shadow-sm"><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="min-w-0 flex-1 px-2 py-2 text-[11px] text-slate-500 outline-none" /><span className="text-slate-300">â€“</span><input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="min-w-0 flex-1 px-2 py-2 text-[11px] text-slate-500 outline-none" /></div>
+        <button className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#ff5a0a] px-3 text-xs font-extrabold text-white shadow-sm"><Filter size={15} />Filter</button>
+        <button onClick={resetFilters} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-orange-300 bg-white px-3 text-xs font-extrabold text-orange-600"><RotateCcw size={15} />Reset</button>
+      </section>
 
-                <div className="space-y-3 mb-8">
-                  <div className="flex items-center gap-2 text-sm text-slate-500 font-medium">
-                    <Clock size={16} className="text-[#FF7400]" />
-                    {new Date(event.date).toLocaleDateString()}
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,2.1fr)_minmax(300px,1fr)]">
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <nav className="flex overflow-x-auto border-b border-slate-100 px-3">
+            {[
+              { id: "active" as const, label: "Active Events", icon: Calendar },
+              { id: "mine" as const, label: "My Registrations", icon: User },
+              { id: "upcoming" as const, label: "Upcoming", icon: Clock },
+              { id: "past" as const, label: "Past Events", icon: History },
+            ].map((tab) => { const Icon = tab.icon; const active = activeSection === tab.id; return <button key={tab.id} onClick={() => setActiveSection(tab.id)} className={`flex min-w-max items-center gap-2 border-b-2 px-5 py-3 text-xs font-extrabold transition ${active ? "border-[#ff5a0a] text-[#ff5a0a]" : "border-transparent text-slate-500 hover:text-slate-800"}`}><Icon size={16} />{tab.label}</button>; })}
+          </nav>
+
+          {loading ? <div className="grid min-h-80 place-items-center"><Loader2 size={36} className="animate-spin text-[#ff5a0a]" /></div> : filteredEvents.length === 0 ? (
+            <div className="flex min-h-80 flex-col items-center justify-center text-center"><span className="grid size-16 place-items-center rounded-full bg-orange-50 text-orange-300"><Calendar size={28} /></span><h3 className="mt-4 font-extrabold text-slate-600">No events found</h3><p className="mt-1 text-sm text-slate-400">Try changing the selected filters.</p></div>
+          ) : (
+            <div className="grid gap-3 p-3 md:grid-cols-2 2xl:grid-cols-3">
+              {filteredEvents.map((event) => { const registered = event.registrations?.[0]; const eventDate = new Date(event.date); return (
+                <motion.article key={event.id} whileHover={{ y: -3 }} onClick={() => setSelectedEvent(event)} className="group cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md">
+                  <div className="relative h-28 overflow-hidden bg-gradient-to-br from-[#173b73] via-[#315f9e] to-orange-100 p-4 text-white">
+                    <div className="absolute -right-4 -top-6 size-28 rounded-full border-[18px] border-white/10" /><p className="relative max-w-[75%] text-lg font-black uppercase leading-tight tracking-tight">{event.title}</p><span className={`absolute right-3 top-3 rounded-full px-2.5 py-1 text-[10px] font-black ${registered ? "bg-emerald-100 text-emerald-700" : eventDate > nextThirtyDays ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}>{registered ? "Registered" : eventDate > nextThirtyDays ? "Upcoming" : "Open"}</span>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-slate-500 font-medium">
-                    <MapPin size={16} className="text-[#FF7400]" />
-                    {event.location}
+                  <div className="p-4"><h3 className="line-clamp-1 text-sm font-black text-[#10244b]">{event.title}</h3><p className="mt-1 line-clamp-1 text-[10px] font-semibold text-slate-400">Organized by Tamil Nadu Judo Association</p><span className="mt-2 inline-block rounded-md bg-orange-50 px-2 py-1 text-[10px] font-bold text-orange-600">{event.eventSection || event.level || "Association Event"}</span>
+                    <div className="mt-3 grid gap-1.5 text-[11px] font-medium text-slate-500"><p className="flex items-center gap-2"><Calendar size={13} />{eventDate.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</p><p className="flex items-center gap-2"><Clock size={13} />{event.time || "09:00 AM onwards"}</p><p className="flex items-center gap-2"><MapPin size={13} /><span className="line-clamp-1">{event.location}</span></p></div>
+                    {event.description && <p className="mt-3 line-clamp-2 text-[11px] leading-relaxed text-slate-500">{event.description}</p>}
+                    <div className="mt-4">{registered ? <button onClick={(e) => { e.stopPropagation(); setSelectedEvent(event); }} className="w-full rounded-lg border border-orange-400 py-2 text-xs font-extrabold text-orange-600">View Details</button> : <button onClick={(e) => { e.stopPropagation(); void handleApply(event); }} className="w-full rounded-lg bg-[#ff5a0a] py-2 text-xs font-extrabold text-white shadow-sm">Register</button>}</div>
                   </div>
-                  {event.meetingLink && (
-                    <div className="flex items-center gap-2 text-sm text-slate-500 font-medium">
-                      <Video size={16} className="text-[#FF7400]" />
-                      <a
-                        href={event.meetingLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-orange-600 hover:text-orange-700 hover:underline font-bold transition-all"
-                      >
-                        Join Meeting
-                      </a>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 text-sm text-slate-500 font-medium pt-1">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${event.isPaid ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
-                      {event.isPaid ? `Entry Fee: ₹${event.entryFee}` : 'Free Entry'}
-                    </span>
-                  </div>
-                  {(event.district?.name || event.zoneId) && (
-                    <div className="flex items-center gap-2 text-sm text-slate-500 font-medium mt-1">
-                      <div className="w-4 h-4 rounded bg-slate-100 flex items-center justify-center">
-                        <MapPin size={10} className="text-slate-400" />
-                      </div>
-                      <span className="text-xs">Region: {event.district?.name || event.zoneId}</span>
-                    </div>
-                  )}
-                  {event.approvedBy && (
-                    <div className="flex items-center gap-2 text-sm text-emerald-600 font-medium mt-3 bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-100">
-                      <CheckCircle2 size={16} />
-                      <span className="text-xs">Approved by <strong>{event.approvedBy}</strong></span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-6 flex gap-3 pt-6 border-t border-slate-100">
-                  {userRole !== "CLUB" && (
-                    (() => {
-                      const userReg = event.registrations?.[0];
-                      if (userReg) {
-                        const statusColors: Record<string, string> = {
-                          PENDING: "bg-amber-50 text-amber-700 border-amber-200",
-                          APPROVED: "bg-emerald-50 text-emerald-700 border-emerald-200",
-                          REJECTED: "bg-red-50 text-red-700 border-red-200",
-                        };
-                        const statusColor = statusColors[userReg.status] || "bg-slate-50 text-slate-700 border-slate-200";
-                        return (
-                          <div className={`w-full py-3 border text-center text-sm font-bold rounded-xl ${statusColor}`}>
-                            Applied 
-                          </div>
-                        );
-                      }
-                      return (
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); handleApply(event); }}
-                          className="w-full py-3 bg-[#FF7400] text-white text-sm font-bold rounded-xl shadow-md shadow-[#FF7400]/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
-                        >
-                          Apply Now
-                        </button>
-                      );
-                    })()
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      )}
-      </>
-      )}
-
-      {activeSection === "mine" && (
-        <>
-        {loading ? (
-          <div className="flex justify-center py-20">
-            <Loader2 size={40} className="animate-spin text-[#FF7400]" />
-          </div>
-        ) : myEvents.length === 0 ? (
-          <div className="text-center py-20 bg-white border border-slate-200 rounded-3xl">
-            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
-              <Calendar size={32} />
+                </motion.article>
+              ); })}
             </div>
-            <h3 className="text-lg font-bold text-slate-500">No Proposed Events</h3>
-            <p className="text-slate-400 text-sm mt-2">You haven't proposed any events yet.</p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {myEvents.map((event) => (
-              <motion.div 
-                key={event.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-4 p-6"
-              >
-                <div className="flex items-start gap-4">
-                  <div className="p-3 bg-[#FF7400]/10 text-[#FF7400] rounded-2xl shrink-0">
-                    <Calendar size={24} />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-xl font-bold text-slate-800">{event.title}</h3>
-                      <span className={`flex items-center gap-1 text-[10px] font-black px-2.5 py-1 rounded-full border ${
-                        event.status === "APPROVED" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                        event.status === "REJECTED" ? "bg-red-50 text-red-600 border-red-200" :
-                        "bg-amber-50 text-amber-700 border-amber-200"
-                      }`}>
-                        {event.status === "APPROVED" ? <><CheckCircle2 size={12}/> Approved</> :
-                         event.status === "REJECTED" ? <><XCircle size={12}/> Rejected</> : 
-                         <><Clock size={12}/> Pending</>}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-4 mt-2 text-sm text-slate-500 font-medium">
-                      <span className="flex items-center gap-1.5"><Clock size={14} className="text-[#FF7400]" />{new Date(event.date).toLocaleDateString()}</span>
-                      <span className="flex items-center gap-1.5"><MapPin size={14} className="text-[#FF7400]" />{event.location}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => handleOpenEdit(event)}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold rounded-xl transition-all text-sm"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => setSelectedEvent(event)}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all text-sm"
-                  >
-                    View Details
-                  </button>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        )}
-        </>
-      )}
+          )}
+        </section>
 
+        <aside className="space-y-3">
+          {featuredEvent && <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><h2 className="flex items-center gap-2 border-b border-slate-100 px-4 py-3 text-sm font-black text-[#10244b]"><Star size={17} className="fill-amber-400 text-amber-400" />Featured Event</h2><div className="relative h-36 overflow-hidden bg-gradient-to-br from-[#183f78] via-[#426fa8] to-[#f0b278] p-5 text-white"><span className="absolute right-3 top-3 rounded-full bg-[#ff5a0a] px-3 py-1 text-[10px] font-black">Featured</span><p className="mt-6 max-w-[80%] text-xl font-black uppercase leading-tight">{featuredEvent.title}</p></div><div className="p-4"><h3 className="font-black text-[#10244b]">{featuredEvent.title}</h3><p className="mt-1 text-[11px] text-slate-500">Organized by Tamil Nadu Judo Association</p><p className="mt-3 flex items-center gap-2 text-xs text-slate-500"><Calendar size={14} />{new Date(featuredEvent.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</p><p className="mt-2 flex items-center gap-2 text-xs text-slate-500"><MapPin size={14} />{featuredEvent.location}</p><button onClick={() => setSelectedEvent(featuredEvent)} className="mt-4 w-full rounded-lg bg-[#ff5a0a] py-2.5 text-xs font-extrabold text-white">View Event â€º</button></div></section>}
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="flex items-center gap-2 text-sm font-black text-[#10244b]"><BarChart3 size={17} className="text-orange-500" />My Event Status</h2><div className="mt-3 grid grid-cols-3 gap-2">{[{ label: "Registered", value: registeredEvents.length, icon: User, style: "bg-emerald-50 text-emerald-600" }, { label: "Pending", value: registeredEvents.filter((event) => event.registrations?.[0]?.status === "PENDING").length, icon: Clock, style: "bg-orange-50 text-orange-600" }, { label: "Attended", value: pastEvents.filter((event) => event.registrations?.length).length, icon: Trophy, style: "bg-blue-50 text-blue-600" }].map((item) => { const Icon = item.icon; return <div key={item.label} className={`rounded-xl p-3 text-center ${item.style}`}><Icon size={19} className="mx-auto" /><p className="mt-1 text-[9px] font-bold">{item.label}</p><p className="text-xl font-black">{item.value}</p></div>; })}</div></section>
+        </aside>
+      </div>
       {/* Create Event Modal */}
       <AnimatePresence>
-        {isCreateModalOpen && (
+        {canProposeEvent && isCreateModalOpen && (
           <div className="fixed inset-0 z-100 flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm ">
             <motion.div 
               initial={{ scale: 0.9, opacity: 0 }}
@@ -816,14 +704,14 @@ export default function MemberEventsPage() {
 
                   {formData.isPaid && (
                     <div className="md:col-span-1">
-                      <label className="block text-sm font-bold text-slate-400 uppercase tracking-widest mb-2">Entry Fee (₹)</label>
+                      <label className="block text-sm font-bold text-slate-400 uppercase tracking-widest mb-2">Entry Fee (â‚¹)</label>
                       <input 
                         type="number" 
                         required
                         min="1"
                         value={formData.entryFee}
                         onChange={e => setFormData({...formData, entryFee: e.target.value})}
-                        placeholder="Enter amount in ₹"
+                        placeholder="Enter amount in â‚¹"
                         className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 transition-all font-semibold"
                       />
                     </div>
@@ -1061,14 +949,14 @@ export default function MemberEventsPage() {
 
                   {formData.isPaid && (
                     <div className="md:col-span-1">
-                      <label className="block text-sm font-bold text-slate-400 uppercase tracking-widest mb-2">Entry Fee (₹)</label>
+                      <label className="block text-sm font-bold text-slate-400 uppercase tracking-widest mb-2">Entry Fee (â‚¹)</label>
                       <input 
                         type="number" 
                         required
                         min="1"
                         value={formData.entryFee}
                         onChange={e => setFormData({...formData, entryFee: e.target.value})}
-                        placeholder="Enter amount in ₹"
+                        placeholder="Enter amount in â‚¹"
                         className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7400]/50 transition-all font-semibold"
                       />
                     </div>
@@ -1213,11 +1101,11 @@ export default function MemberEventsPage() {
 
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-orange-100 text-[#FF7400] flex items-center justify-center">
-                    <span className="font-bold text-md text-[#FF7400]">₹</span>
+                    <span className="font-bold text-md text-[#FF7400]">â‚¹</span>
                   </div>
                   <div>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Entry Fee</p>
-                    <p className="text-sm font-bold text-slate-700">{selectedEvent.isPaid ? `₹ ${selectedEvent.entryFee}` : 'Free Entry'}</p>
+                    <p className="text-sm font-bold text-slate-700">{selectedEvent.isPaid ? `â‚¹ ${selectedEvent.entryFee}` : 'Free Entry'}</p>
                   </div>
                 </div>
 

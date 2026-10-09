@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { Mail, Phone, MapPin, Loader2 } from "lucide-react";
 
 const Field = ({
@@ -37,6 +38,7 @@ export default function PlayerProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [userRole, setUserRole] = useState("");
+  const [editRequest, setEditRequest] = useState<{ id: string; status: string } | null>(null);
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000/api";
 
@@ -49,13 +51,19 @@ export default function PlayerProfilePage() {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE}/auth/profile`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (res.ok) {
+      const headers = { Authorization: `Bearer ${token}` };
+      const [profileResponse, requestResponse] = await Promise.all([
+        fetch(`${API_BASE}/auth/profile`, { headers }),
+        fetch(`${API_BASE}/profile-edit-requests/my`, { headers, cache: "no-store" }),
+      ]);
+      const data = await profileResponse.json();
+      if (profileResponse.ok) {
         setProfileData(data.user);
         setFormData(buildForm(data.user));
+      }
+      if (requestResponse.ok) {
+        const request = await requestResponse.json();
+        setEditRequest(request?.id ? { id: request.id, status: request.status } : null);
       }
     } catch (err) {
       console.error(err);
@@ -92,6 +100,7 @@ export default function PlayerProfilePage() {
   };
 
   const handleSave = async () => {
+    if (editRequest?.status !== "APPROVED") return;
     setSaving(true);
     try {
       const token = localStorage.getItem("token");
@@ -103,6 +112,7 @@ export default function PlayerProfilePage() {
         height: formData.height,
         weight: formData.weight,
         mobileNumber: formData.mobileNumber,
+        profileEditRequestId: editRequest.id,
       };
       const res = await fetch(`${API_BASE}/auth/profile`, {
         method: "PUT",
@@ -118,6 +128,7 @@ export default function PlayerProfilePage() {
         setProfileData(updated);
         setFormData(buildForm(updated));
         setIsEditing(false);
+        setEditRequest(null);
       }
     } catch (err) {
       console.error(err);
@@ -173,12 +184,13 @@ export default function PlayerProfilePage() {
 
           {/* Edit Profile button */}
           <div className="absolute top-4 right-4">
-            <button
-              onClick={() => setIsEditing(true)}
-              className="px-4 py-1.5 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 hover:border-[#FF7400] hover:text-[#FF7400] transition-all"
-            >
-              Edit Profile
-            </button>
+            {editRequest?.status === "APPROVED" ? (
+              <button onClick={() => setIsEditing(true)} className="px-4 py-1.5 border border-[#FF7400] rounded-lg text-sm font-semibold text-[#FF7400] hover:bg-orange-50 transition-all">Edit Profile</button>
+            ) : editRequest?.status === "PENDING" ? (
+              <span className="inline-flex rounded-lg border border-amber-200 bg-amber-50 px-4 py-1.5 text-xs font-bold text-amber-700">Coach approval pending</span>
+            ) : (
+              <Link href="/dashboard/player" className="inline-flex rounded-lg border border-[#FF7400] px-4 py-1.5 text-xs font-bold text-[#FF7400] hover:bg-orange-50 transition-all">Request coach approval</Link>
+            )}
           </div>
 
           {/* Avatar + name */}

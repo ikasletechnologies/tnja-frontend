@@ -22,6 +22,7 @@ import {
   ClipboardList,
   ScrollText,
   FileCheck2,
+  FileBadge2,
   ChevronDown,
 } from "lucide-react";
 
@@ -167,7 +168,7 @@ export default function DashboardLayout({
     socket.onclose = () => {};
 
     socket.onerror = () => {
-      // Connection failed silently — backend may not be running
+      // Connection failed silently â€” backend may not be running
     };
 
     return () => {
@@ -213,7 +214,7 @@ export default function DashboardLayout({
       }
     };
     loadEditRequests();
-    const interval = window.setInterval(loadEditRequests, 15000);
+    const interval = window.setInterval(loadEditRequests, 60000);
     const onFocus = () => loadEditRequests();
     window.addEventListener("focus", onFocus);
     return () => { cancelled = true; window.clearInterval(interval); window.removeEventListener("focus", onFocus); };
@@ -299,6 +300,7 @@ export default function DashboardLayout({
         { name: "Tournaments", href: "/dashboard/player/tournaments", icon: Trophy },
         { name: "Match History", href: "/dashboard/player/match-history", icon: ScrollText },
         { name: "Events", href: "/dashboard/member/events", icon: Calendar },
+        { name: "Certificates", href: "/dashboard/player/certificates", icon: FileBadge2 },
         { name: "Grievances", href: "/dashboard/grievance", icon: MessageSquare },
       ]
     : userRole === "COACH"
@@ -307,6 +309,7 @@ export default function DashboardLayout({
         { name: "My Students", href: "/dashboard/coach/students", icon: Users },
         { name: "My Mats", href: "/dashboard/coach/mats", icon: Trophy },
         { name: "Events", href: "/dashboard/member/events", icon: Calendar },
+        { name: "Profile Settings", href: "/dashboard/coach/settings", icon: Settings },
         { name: "Grievances", href: "/dashboard/grievance", icon: MessageSquare },
       ]
     : userRole === "CLUB"
@@ -396,11 +399,13 @@ export default function DashboardLayout({
                   ? "/dashboard/admin/profile"
                   : userRole === "PLAYER"
                   ? "/dashboard/player/profile"
+                  : userRole === "COACH"
+                  ? "/dashboard/coach/settings"
                   : "/dashboard/member"
               }
               onClick={() => { if (window.innerWidth < 768) setIsSidebarOpen(false); }}
               className={`block text-sm font-bold pb-2 border-b border-white/10 transition-opacity hover:opacity-75 ${
-                pathname === "/dashboard/admin/profile" || pathname === "/dashboard/player/profile" || pathname === "/dashboard/member"
+                pathname === "/dashboard/admin/profile" || pathname === "/dashboard/player/profile" || pathname === "/dashboard/coach/settings" || pathname === "/dashboard/member"
                   ? "text-orange-400"
                   : "text-slate-300"
               }`}
@@ -687,7 +692,7 @@ export default function DashboardLayout({
         </header>
 
         {/* Scrollable Area */}
-        <main className="flex-grow overflow-y-auto p-8 bg-slate-50 print:overflow-visible print:p-0 print:bg-white print:block">
+        <main className="flex-grow overflow-y-auto bg-slate-50 p-3 sm:p-5 lg:p-6 xl:p-8 print:overflow-visible print:p-0 print:bg-white print:block">
           {children}
         </main>
       </div>

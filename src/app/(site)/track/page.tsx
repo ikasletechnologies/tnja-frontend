@@ -182,6 +182,11 @@ function TrackPageContent() {
   const handleDirectLogin = () => {
     if (!result) return;
 
+    if (result.status === "PENDING") {
+      alert("Your application is pending approval.");
+      return;
+    }
+
     localStorage.setItem("userRole", result.role);
     localStorage.setItem("userName", result.fullName || "");
     localStorage.setItem("userStatus", result.status || "APPROVED");
@@ -192,11 +197,7 @@ function TrackPageContent() {
       return;
     }
 
-    if (result.status === "PENDING") {
-      alert("Your application is pending approval.");
-      return;
-    }
-    
+
     if (result.status === "REJECTED" || result.status === "REPLAY") {
       router.push("/dashboard/resubmit");
       return;
@@ -276,10 +277,17 @@ function TrackPageContent() {
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || data.message || "Record not found.");
+      const trackedUser = data.user || data;
       if (data.token) {
         localStorage.setItem("token", data.token);
+      } else if (trackedUser.status === "PENDING") {
+        localStorage.removeItem("token");
+        localStorage.removeItem("userRole");
+        localStorage.removeItem("userName");
+        localStorage.removeItem("userStatus");
+        localStorage.removeItem("userEmail");
       }
-      setResult(data.user || data);
+      setResult(trackedUser);
     } catch (err: any) {
       if (err.name === 'TypeError') {
         setError("Network error. Please check if the server is running.");
@@ -557,6 +565,7 @@ function TrackPageContent() {
                 })}
               </div>
 
+              {result.status === "APPROVED" && (
               <div className="pt-6 border-t border-slate-100 mt-4">
                 <button
                   onClick={handleDirectLogin}
@@ -566,6 +575,7 @@ function TrackPageContent() {
                   Login to Dashboard →
                 </button>
               </div>
+              )}
 
               
             </motion.div>

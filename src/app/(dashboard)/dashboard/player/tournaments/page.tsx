@@ -26,7 +26,6 @@ import {
   Swords,
   X,
   CalendarDays,
-  Plus,
   RefreshCw,
 } from "lucide-react";
 
@@ -136,7 +135,7 @@ export default function PlayerTournamentsPage() {
       a.click();
       URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      showToast("Certificate downloaded! 🎖️", "success");
+      showToast("Certificate downloaded! ðŸŽ–ï¸", "success");
     } catch (err) {
       showToast("Error downloading certificate", "error");
     }
@@ -295,7 +294,7 @@ export default function PlayerTournamentsPage() {
         amount: orderData.amount,
         currency: orderData.currency,
         name: "TNJA Tournament",
-        description: `Entry Fee – ${tournament.title}`,
+        description: `Entry Fee â€“ ${tournament.title}`,
         order_id: orderData.id,
         handler: async function (response: any) {
           try {
@@ -343,7 +342,7 @@ export default function PlayerTournamentsPage() {
   const isMemberPaid = playerData?.isPaid || playerData?.isBPL;
 
   const regStatusConfig: Record<string, { label: string; color: string }> = {
-    PENDING: { label: "Registered – Awaiting Approval", color: "bg-amber-50 text-amber-700 border-amber-200" },
+    PENDING: { label: "Registered â€“ Awaiting Approval", color: "bg-amber-50 text-amber-700 border-amber-200" },
     APPROVED: { label: "Approved", color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
     REJECTED: { label: "Rejected", color: "bg-red-50 text-red-700 border-red-200" },
   };
@@ -466,7 +465,6 @@ export default function PlayerTournamentsPage() {
           </button>
         ))}
       </div>
-        <button onClick={() => document.getElementById("tournament-results")?.scrollIntoView({ behavior: "smooth" })} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#ff6b1a] px-4 py-2.5 text-[10px] font-bold text-white shadow-lg shadow-orange-200"><Plus size={14} /> Register / Join Tournament</button>
       </div>
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -572,7 +570,7 @@ export default function PlayerTournamentsPage() {
                         <Clock size={14} className="text-[#FF7400]" />
                         {new Date(tournament.date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                         {tournament.dateTo &&
-                          ` – ${new Date(tournament.dateTo).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`}
+                          ` â€“ ${new Date(tournament.dateTo).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`}
                       </div>
                       <div className="flex items-center gap-2">
                         <MapPin size={14} className="text-[#FF7400]" />
@@ -588,7 +586,7 @@ export default function PlayerTournamentsPage() {
                         <IndianRupee size={14} className="text-[#FF7400]" />
                         Entry Fee:{" "}
                         <span className="font-bold text-slate-700">
-                          {tournament.entryFee === 0 ? "Free" : `₹${tournament.entryFee}`}
+                          {tournament.entryFee === 0 ? "Free" : `â‚¹${tournament.entryFee}`}
                         </span>
                         {tournament.allowBPL && (
                           <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-bold ml-1">BPL FREE</span>
@@ -620,15 +618,15 @@ export default function PlayerTournamentsPage() {
                     )}
 
                     <div className="mt-auto pt-4 border-t border-slate-100">
-                      {/* ── CLOSED: Show placement + Download Certificate ── */}
+                      {/* â”€â”€ CLOSED: Show placement + Download Certificate â”€â”€ */}
                       {myRegs.length > 0 && (tournament.status === "CLOSED" || myRegs.some((r: any) => r.isCategoryConcluded)) ? (
                         <div className="flex flex-col gap-3">
                           {myRegs.filter((r: any) => tournament.status === "CLOSED" || r.isCategoryConcluded).map((r: any) => {
                             const p = r.placement;
                             const cfg: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
-                              FIRST:         { label: "1st Place — Gold",   cls: "bg-yellow-50 text-yellow-700 border-yellow-300", icon: <Trophy size={16} /> },
-                              SECOND:        { label: "2nd Place — Silver", cls: "bg-slate-50 text-slate-700 border-slate-300", icon: <Medal size={16} /> },
-                              THIRD:         { label: "3rd Place — Bronze", cls: "bg-orange-50 text-orange-700 border-orange-300", icon: <Medal size={16} /> },
+                              FIRST:         { label: "1st Place â€” Gold",   cls: "bg-yellow-50 text-yellow-700 border-yellow-300", icon: <Trophy size={16} /> },
+                              SECOND:        { label: "2nd Place â€” Silver", cls: "bg-slate-50 text-slate-700 border-slate-300", icon: <Medal size={16} /> },
+                              THIRD:         { label: "3rd Place â€” Bronze", cls: "bg-orange-50 text-orange-700 border-orange-300", icon: <Medal size={16} /> },
                               PARTICIPATION: { label: "Participation",      cls: "bg-blue-50 text-blue-700 border-blue-200", icon: <Award size={16} /> },
                             };
                             const entry = cfg[p] ?? cfg["PARTICIPATION"];
