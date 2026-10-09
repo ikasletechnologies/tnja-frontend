@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -6,6 +6,7 @@ import Button from '@/components/common/Button';
 import { Check, Asterisk, User, Mail, Smartphone, MapPin, Calendar, Camera, FileText } from 'lucide-react';
 import { MemberRegistrationData } from '@/types/registration';
 import FileUpload from '@/components/common/FileUpload';
+import PincodeLookup from '@/components/common/PincodeLookup';
 
 const RequiredSymbol = () => <Asterisk size={10} className="text-red-500 stroke-[4px]" />;
 
@@ -186,7 +187,7 @@ const DatePickerField = ({ label, name, required = false, value, onChange, place
               className="px-4 py-1.5 bg-gray-100 hover:bg-gray-200 transition-colors rounded-lg text-sm font-bold text-gray-800 flex items-center gap-2"
             >
               {currentYear} 
-              <span className="text-[10px]">{viewMode === 'year' ? '▲' : '▼'}</span>
+              <span className="text-[10px]">{viewMode === 'year' ? 'â–²' : 'â–¼'}</span>
             </button>
           </div>
 
@@ -584,6 +585,7 @@ const MemberRegistrationForm = () => {
                 onChange={handleInputChange}
                 autoComplete="off"
               />
+                <PincodeLookup pincode={formData.pincode} onPlaceChange={(place) => { setTaluks(place.taluks); setFormData((prev) => ({ ...prev, districtId: place.districtId || prev.districtId, talukId: place.talukId || "", taluk: place.talukId ? place.taluk : "" })); }} />
             </div>
           </section>
 
@@ -815,6 +817,7 @@ const MemberRegistrationForm = () => {
                   onChange={handleInputChange}
                   autoComplete="off"
                 />
+                <PincodeLookup pincode={formData.addressPincode} onPlaceChange={(place) => { setFormData((prev) => ({ ...prev, city: place.city })); }} />
               </div>
             </div>
           </section>
@@ -946,3 +949,4 @@ const MemberRegistrationForm = () => {
 };
 
 export default MemberRegistrationForm;
+

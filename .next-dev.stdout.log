@@ -1,0 +1,16 @@
+
+> tnja-frontend@0.1.0 dev
+> next dev -p 3035
+
+▲ Next.js 16.2.6 (Turbopack)
+- Local:         http://localhost:3035
+- Network:       http://192.168.0.112:3035
+- Environments: .env
+✓ Ready in 2.4s
+Creating turbopack project { dir: 'D:\\TNJA\\tnja-frontend', testMode: true }
+
+○ Compiling / ...
+ GET / 200 in 19.7s (next.js: 17.6s, application-code: 2.0s)
+ GET / 200 in 20.4s (next.js: 17.4s, application-code: 3.0s)
+ GET / 200 in 185ms (next.js: 8ms, application-code: 176ms)
+[?25h

@@ -1,0 +1,60 @@
+[browser] ./src/app/globals.css
+Error evaluating Node.js code
+CssSyntaxError: tailwindcss: D:\TNJA\tnja-frontend\src\app\globals.css:1:1: D:\TNJA\tnja-frontend\package.json (directory description file): SyntaxError: Unexpected token '﻿', "﻿{
+    "n"... is not valid JSON
+    [at Input.error (turbopack:///[project]/node_modules/postcss/lib/input.js:135:16)]
+    [at Root.error (turbopack:///[project]/node_modules/postcss/lib/node.js:146:32)]
+    [at Object.Once (D:\TNJA\tnja-frontend\node_modules\@tailwindcss\postcss\dist\index.js:10:6917)]
+    [at process.processTicksAndRejections (node:internal/process/task_queues:104:5)]
+    [at async LazyResult.runAsync (turbopack:///[project]/node_modules/postcss/lib/lazy-result.js:293:11)]
+    [at async transform (turbopack:///[turbopack-node]/transforms/postcss.ts:70:34)]
+    [at async run (turbopack:///[turbopack-node]/child_process/evaluate.ts:89:23)]
+
+Import trace:
+  Client Component Browser:
+    ./src/app/globals.css [Client Component Browser]
+    ./src/app/layout.tsx [Server Component] 
+    at handleErrors (file://D:/TNJA/tnja-frontend/.next/dev/static/chunks/node_modules_next_dist_client_0pe1dg-._.js:2774:21)
+    at processMessage (file://D:/TNJA/tnja-frontend/.next/dev/static/chunks/node_modules_next_dist_client_0pe1dg-._.js:2835:28)
+    at <unknown> (file://D:/TNJA/tnja-frontend/.next/dev/static/chunks/node_modules_next_dist_client_0pe1dg-._.js:2680:13)
+    at WebSocket.handleMessage (file://D:/TNJA/tnja-frontend/.next/dev/static/chunks/node_modules_next_dist_client_0pe1dg-._.js:2325:17) (file://D:/TNJA/tnja-frontend/.next/dev/static/chunks/node_modules_next_dist_client_0pe1dg-._.js:2774:21)
+[browser] ./src/app/globals.css
+Error evaluating Node.js code
+CssSyntaxError: tailwindcss: D:\TNJA\tnja-frontend\src\app\globals.css:1:1: D:\TNJA\tnja-frontend\package.json (directory description file): SyntaxError: Unexpected token '﻿', "﻿{
+    "n"... is not valid JSON
+    [at Input.error (turbopack:///[project]/node_modules/postcss/lib/input.js:135:16)]
+    [at Root.error (turbopack:///[project]/node_modules/postcss/lib/node.js:146:32)]
+    [at Object.Once (D:\TNJA\tnja-frontend\node_modules\@tailwindcss\postcss\dist\index.js:10:6917)]
+    [at process.processTicksAndRejections (node:internal/process/task_queues:104:5)]
+    [at async LazyResult.runAsync (turbopack:///[project]/node_modules/postcss/lib/lazy-result.js:293:11)]
+    [at async transform (turbopack:///[turbopack-node]/transforms/postcss.ts:70:34)]
+    [at async run (turbopack:///[turbopack-node]/child_process/evaluate.ts:89:23)]
+
+Import trace:
+  Client Component Browser:
+    ./src/app/globals.css [Client Component Browser]
+    ./src/app/layout.tsx [Server Component] 
+    at handleErrors (file://D:/TNJA/tnja-frontend/.next/dev/static/chunks/node_modules_next_dist_client_0pe1dg-._.js:2774:21)
+    at processMessage (file://D:/TNJA/tnja-frontend/.next/dev/static/chunks/node_modules_next_dist_client_0pe1dg-._.js:2835:28)
+    at <unknown> (file://D:/TNJA/tnja-frontend/.next/dev/static/chunks/node_modules_next_dist_client_0pe1dg-._.js:2680:13)
+    at WebSocket.handleMessage (file://D:/TNJA/tnja-frontend/.next/dev/static/chunks/node_modules_next_dist_client_0pe1dg-._.js:2325:17) (file://D:/TNJA/tnja-frontend/.next/dev/static/chunks/node_modules_next_dist_client_0pe1dg-._.js:2774:21)
+[browser] ./src/app/globals.css
+Error evaluating Node.js code
+CssSyntaxError: tailwindcss: D:\TNJA\tnja-frontend\src\app\globals.css:1:1: D:\TNJA\tnja-frontend\package.json (directory description file): SyntaxError: Unexpected token '﻿', "﻿{
+    "n"... is not valid JSON
+    [at Input.error (turbopack:///[project]/node_modules/postcss/lib/input.js:135:16)]
+    [at Root.error (turbopack:///[project]/node_modules/postcss/lib/node.js:146:32)]
+    [at Object.Once (D:\TNJA\tnja-frontend\node_modules\@tailwindcss\postcss\dist\index.js:10:6917)]
+    [at process.processTicksAndRejections (node:internal/process/task_queues:104:5)]
+    [at async LazyResult.runAsync (turbopack:///[project]/node_modules/postcss/lib/lazy-result.js:293:11)]
+    [at async transform (turbopack:///[turbopack-node]/transforms/postcss.ts:70:34)]
+    [at async run (turbopack:///[turbopack-node]/child_process/evaluate.ts:89:23)]
+
+Import trace:
+  Client Component Browser:
+    ./src/app/globals.css [Client Component Browser]
+    ./src/app/layout.tsx [Server Component] 
+    at handleErrors (file://D:/TNJA/tnja-frontend/.next/dev/static/chunks/node_modules_next_dist_client_0pe1dg-._.js:2774:21)
+    at processMessage (file://D:/TNJA/tnja-frontend/.next/dev/static/chunks/node_modules_next_dist_client_0pe1dg-._.js:2835:28)
+    at <unknown> (file://D:/TNJA/tnja-frontend/.next/dev/static/chunks/node_modules_next_dist_client_0pe1dg-._.js:2680:13)
+    at WebSocket.handleMessage (file://D:/TNJA/tnja-frontend/.next/dev/static/chunks/node_modules_next_dist_client_0pe1dg-._.js:2325:17) (file://D:/TNJA/tnja-frontend/.next/dev/static/chunks/node_modules_next_dist_client_0pe1dg-._.js:2774:21)

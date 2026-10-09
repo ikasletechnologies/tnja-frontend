@@ -6,6 +6,7 @@ import Button from '@/components/common/Button';
 import { Search, Upload, Check, Asterisk } from 'lucide-react';
 import { ClubRegistrationData } from '@/types/registration';
 import FileUpload from '@/components/common/FileUpload';
+import PincodeLookup from '@/components/common/PincodeLookup';
 
 const RequiredSymbol = () => <Asterisk size={10} className="text-red-500 stroke-[4px]" />;
 
@@ -448,6 +449,7 @@ const ClubRegistrationForm = ({ initialData = null, isResubmit = false }: { init
                   onChange={handleInputChange}
                   autoComplete="off"
                 />
+                <PincodeLookup pincode={formData.pincode} onPlaceChange={(place) => { setTaluks(place.taluks); setFormData((prev) => ({ ...prev, districtId: place.districtId || prev.districtId, talukId: place.talukId || "", taluk: place.talukId ? place.taluk : "" })); }} />
               </div>
             </div>
           </section>
