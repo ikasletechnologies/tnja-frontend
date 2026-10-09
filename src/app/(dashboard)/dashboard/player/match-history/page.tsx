@@ -1,22 +1,23 @@
 "use client";
 
+/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/immutability, react-hooks/set-state-in-effect */
+
 import React, { useEffect, useState, useMemo } from "react";
 import {
   Trophy,
-  Calendar,
   MapPin,
-  Hash,
   Download,
   Filter,
-  CheckCircle2,
   XCircle,
   Loader2,
   Scale,
   Search,
   ChevronLeft,
   ChevronRight,
+  RefreshCw,
+  ListChecks,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { exportMatchToPDF } from "@/utils/pdfExport";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000/api";
@@ -233,153 +234,56 @@ export default function MatchHistoryPage() {
     );
   }
 
+  const resetFilters = () => {
+    setSearchQuery(""); setFilterLevel("ALL"); setFilterResult("ALL"); setFilterYear("ALL");
+  };
+  const winRate = stats.total ? Math.round((stats.wins / stats.total) * 100) : 0;
+
   return (
-    <div className="max-w-6xl mx-auto space-y-8 pb-12">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-800">Match History</h1>
-          <p className="text-slate-500 mt-1">Review your past performances and download match reports</p>
-        </div>
-      </div>
+    <div className="space-y-4 pb-8">
+      <section className="relative overflow-hidden rounded-2xl border border-orange-100 bg-gradient-to-r from-[#fff8ef] via-[#fff4e8] to-[#ffe9da] px-5 py-4 shadow-[0_8px_28px_rgba(255,116,0,0.07)]">
+        <div className="pointer-events-none absolute inset-y-0 right-8 hidden w-72 bg-[url('/homepage/whatjudo/judo2.png')] bg-contain bg-right bg-no-repeat opacity-[0.12] md:block" />
+        <div className="relative flex items-center gap-4"><span className="grid h-11 w-11 place-items-center rounded-full bg-orange-100 text-[#ff6b1a]"><Trophy size={21} /></span><div><h1 className="text-xl font-extrabold text-[#ff6b1a]">Match History</h1><p className="mt-1 text-[10px] font-medium text-slate-400">Review your past performances, results, and download match reports.</p></div></div>
+      </section>
 
-      {/* Statistics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Matches</p>
-          <div className="flex items-end justify-between">
-            <h3 className="text-3xl font-black text-slate-800">{stats.total}</h3>
-            <Hash size={24} className="text-slate-200 mb-1" />
-          </div>
-        </div>
-        <div className="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 shadow-sm">
-          <p className="text-xs font-bold text-emerald-600/80 uppercase tracking-wider mb-1">Wins</p>
-          <div className="flex items-end justify-between">
-            <h3 className="text-3xl font-black text-emerald-700">{stats.wins}</h3>
-            <Trophy size={24} className="text-emerald-200 mb-1" />
-          </div>
-        </div>
-        <div className="bg-rose-50 rounded-2xl p-5 border border-rose-100 shadow-sm">
-          <p className="text-xs font-bold text-rose-600/80 uppercase tracking-wider mb-1">Losses</p>
-          <div className="flex items-end justify-between">
-            <h3 className="text-3xl font-black text-rose-700">{stats.losses}</h3>
-            <XCircle size={24} className="text-rose-200 mb-1" />
-          </div>
-        </div>
-        <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 shadow-sm">
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Draws</p>
-          <div className="flex items-end justify-between">
-            <h3 className="text-3xl font-black text-slate-700">{stats.draws}</h3>
-            <Scale size={24} className="text-slate-200 mb-1" />
-          </div>
-        </div>
-      </div>
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[
+          { label: "Total Matches", value: stats.total, icon: ListChecks, tone: "border-orange-100 bg-orange-50/60 text-orange-500", note: `${stats.total} recorded matches` },
+          { label: "Wins", value: stats.wins, icon: Trophy, tone: "border-emerald-100 bg-emerald-50/60 text-emerald-500", note: `${winRate}% win rate` },
+          { label: "Losses", value: stats.losses, icon: XCircle, tone: "border-rose-100 bg-rose-50/60 text-rose-500", note: stats.total ? `${Math.round((stats.losses / stats.total) * 100)}% loss rate` : "0% loss rate" },
+          { label: "Draws", value: stats.draws, icon: Scale, tone: "border-blue-100 bg-blue-50/60 text-blue-500", note: stats.total ? `${Math.round((stats.draws / stats.total) * 100)}% draw rate` : "0% draw rate" },
+        ].map((stat) => <article key={stat.label} className={`flex items-center gap-3 rounded-2xl border p-4 ${stat.tone}`}><span className="grid h-11 w-11 place-items-center rounded-full bg-white/70"><stat.icon size={20} /></span><div><p className="text-[9px] font-bold uppercase tracking-wide opacity-80">{stat.label}</p><p className="text-xl font-black text-[#17213b]">{stat.value}</p><p className="text-[8px] font-semibold opacity-80">{stat.note}</p></div></article>)}
+      </section>
 
-      {/* Filters Bar */}
-      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="relative w-full md:max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input
-            type="text"
-            placeholder="Search tournament or opponent..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#FF7400]/30 transition-all"
-          />
-        </div>
+      <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[1fr_120px_120px_120px_auto_auto]">
+        <label className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} /><input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search by tournament, opponent, or result..." className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-[10px] outline-none focus:border-orange-300" /></label>
+        <select value={filterLevel} onChange={(e) => setFilterLevel(e.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-semibold text-slate-600"><option value="ALL">All Levels</option><option value="CLUB">Club</option><option value="DISTRICT">District</option><option value="ZONE">Zonal</option><option value="STATE">State</option><option value="NATIONAL">National</option></select>
+        <select value={filterResult} onChange={(e) => setFilterResult(e.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-semibold text-slate-600"><option value="ALL">All Results</option><option value="WIN">Wins</option><option value="LOSS">Losses</option><option value="DRAW">Draws</option></select>
+        <select value={filterYear} onChange={(e) => setFilterYear(e.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-semibold text-slate-600"><option value="ALL">All Years</option>{availableYears.map(year => <option key={year} value={year}>{year}</option>)}</select>
+        <button className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-[#ff6b1a] px-4 text-[10px] font-bold text-white"><Filter size={13} /> Filter</button>
+        <button onClick={resetFilters} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-[#ff6b1a] bg-white px-4 text-[10px] font-bold text-[#ff6b1a]"><RefreshCw size={13} /> Reset</button>
+      </section>
 
-        <div className="flex flex-wrap md:flex-nowrap gap-3 w-full md:w-auto">
-          <select 
-            value={filterLevel} 
-            onChange={(e) => setFilterLevel(e.target.value)}
-            className="flex-1 md:flex-none px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#FF7400]/30"
-          >
-            <option value="ALL">All Levels</option>
-            <option value="CLUB">Club</option>
-            <option value="DISTRICT">District</option>
-            <option value="ZONE">Zonal</option>
-            <option value="STATE">State</option>
-            <option value="NATIONAL">National</option>
-          </select>
-          
-          <select 
-            value={filterResult} 
-            onChange={(e) => setFilterResult(e.target.value)}
-            className="flex-1 md:flex-none px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#FF7400]/30"
-          >
-            <option value="ALL">All Results</option>
-            <option value="WIN">Wins</option>
-            <option value="LOSS">Losses</option>
-            <option value="DRAW">Draws</option>
-          </select>
-
-          {availableYears.length > 0 && (
-            <select 
-              value={filterYear} 
-              onChange={(e) => setFilterYear(e.target.value)}
-              className="flex-1 md:flex-none px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#FF7400]/30"
-            >
-              <option value="ALL">All Years</option>
-              {availableYears.map(year => <option key={year} value={year}>{year}</option>)}
-            </select>
-          )}
-        </div>
-      </div>
-
-      {/* Match List */}
-      <div className="space-y-4">
+      <div>
         {filteredMatches.length === 0 ? (
-          <div className="text-center py-20 bg-white border border-slate-200 rounded-3xl">
+          <div className="rounded-2xl border border-slate-200 bg-white py-16 text-center">
             <Trophy size={48} className="mx-auto mb-4 text-slate-200" />
             <h3 className="text-xl font-bold text-slate-500">No matches found</h3>
             <p className="text-slate-400 mt-2">Try adjusting your filters or search query.</p>
           </div>
         ) : (
-          <AnimatePresence>
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.04)]"><div className="overflow-x-auto"><table className="w-full min-w-[940px] border-collapse text-left"><thead className="bg-slate-50/80 text-[9px] font-bold text-slate-600"><tr><th className="px-4 py-3">#</th><th className="px-3 py-3">Date</th><th className="px-3 py-3">Tournament</th><th className="px-3 py-3">Opponent</th><th className="px-3 py-3">Level</th><th className="px-3 py-3">Result</th><th className="px-3 py-3">Score</th><th className="px-3 py-3">Round</th><th className="px-4 py-3 text-center">Action</th></tr></thead><tbody className="divide-y divide-slate-100">
             {currentMatches.map((match, idx) => {
               const isWin = match.rawMatch.winnerId === playerData?.id;
               const isDraw = !match.rawMatch.winnerId;
 
               return (
-                <motion.div 
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
+                <motion.tr 
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                   key={`${match.tournamentId}-${match.matchNumber}-${idx}`} 
-                  className="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-6 hover:shadow-md transition-shadow"
+                  className="text-[9px] text-slate-600 transition hover:bg-orange-50/20"
                 >
-                  <div className="flex-1 space-y-3">
-                    <div className="flex items-center gap-3">
-                      {isWin ? (
-                        <span className="bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider">WIN</span>
-                      ) : isDraw ? (
-                        <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider">DRAW</span>
-                      ) : (
-                        <span className="bg-rose-100 text-rose-700 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider">LOSS</span>
-                      )}
-                      <span className="px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-md text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                        {match.tournamentLevel} Level
-                      </span>
-                    </div>
-                    
-                    <h4 className="font-bold text-slate-800 text-lg leading-tight">{match.tournamentName}</h4>
-                    
-                    <div className="flex flex-wrap items-center gap-3 text-xs font-medium text-slate-500">
-                      <span className="flex items-center gap-1.5"><Calendar size={14} className="text-[#FF7400]"/> {new Date(match.tournamentDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span>
-                      <span className="flex items-center gap-1.5"><MapPin size={14} className="text-[#FF7400]" /> {match.tournamentLocation}</span>
-                      <span className="flex items-center gap-1.5 text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 font-bold"><Hash size={14} /> Round {match.roundNum}</span>
-                    </div>
-                  </div>
-
-                  <div className="hidden lg:block w-px h-16 bg-slate-200" />
-
-                  <div className="flex-1 flex flex-col lg:items-end space-y-3 border-t lg:border-t-0 border-slate-100 pt-4 lg:pt-0">
-                    <div className="lg:text-right">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-0.5">Opponent</span>
-                      <span className="font-bold text-slate-800 text-[15px]">{match.opponent?.playerName || "Unknown"}</span>
-                      {match.opponent?.club && <span className="block text-xs font-medium text-slate-500">{match.opponent.club}</span>}
-                    </div>
-                    
-                    <button
+                  <td className="px-4 py-3 font-bold text-slate-400">{(currentPage - 1) * itemsPerPage + idx + 1}</td><td className="px-3 py-3 font-medium">{new Date(match.tournamentDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</td><td className="px-3 py-3"><p className="max-w-[210px] truncate text-[10px] font-bold text-slate-700">{match.tournamentName}</p><p className="mt-0.5 flex items-center gap-1 text-[8px] text-slate-400"><MapPin size={9} />{match.tournamentLocation || "Venue not recorded"}</p></td><td className="px-3 py-3"><p className="text-[10px] font-bold text-slate-700">{match.opponent?.playerName || "Unknown"}</p><p className="text-[8px] text-slate-400">{match.opponent?.club || "Club not recorded"}</p></td><td className="px-3 py-3"><span className="rounded-lg bg-blue-50 px-2 py-1 text-[8px] font-bold text-blue-600">{match.tournamentLevel}</span></td><td className="px-3 py-3">{isWin ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 font-bold text-emerald-600"><Trophy size={10} />Win</span> : isDraw ? <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 font-bold text-slate-600"><Scale size={10} />Draw</span> : <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-1 font-bold text-rose-600"><XCircle size={10} />Loss</span>}</td><td className="px-3 py-3 font-semibold">{match.rawMatch.score || match.rawMatch.resultType || "—"}</td><td className="px-3 py-3">Round {match.roundNum}</td><td className="px-4 py-3 text-center"><button
                       onClick={() => {
                         exportMatchToPDF(
                           match.rawMatch,
@@ -390,35 +294,34 @@ export default function MatchHistoryPage() {
                           match.nextMatchInfo
                         );
                       }}
-                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-50 border border-slate-200 hover:bg-[#FF7400] hover:border-[#FF7400] text-slate-600 hover:text-white rounded-xl text-xs font-bold transition-all w-full lg:w-fit"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[#ff6b1a] px-3 py-2 text-[8px] font-bold text-[#ff6b1a] transition hover:bg-[#ff6b1a] hover:text-white"
                     >
-                      <Download size={15} /> Download Match Report
-                    </button>
-                  </div>
-                </motion.div>
+                      <Download size={11} /> View Details
+                    </button></td>
+                </motion.tr>
               );
             })}
-          </AnimatePresence>
+          </tbody></table></div><div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-[9px] font-medium text-slate-400"><span>Showing {filteredMatches.length ? (currentPage - 1) * itemsPerPage + 1 : 0} to {Math.min(currentPage * itemsPerPage, filteredMatches.length)} of {filteredMatches.length} matches</span><span>{itemsPerPage} per page</span></div></div>
         )}
       </div>
 
       {/* Pagination Controls */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-4 pt-6">
+        <div className="flex items-center justify-end gap-2 pt-2">
           <button 
             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
             disabled={currentPage === 1}
-            className="p-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-all"
+            className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 disabled:opacity-40"
           >
             <ChevronLeft size={20} />
           </button>
-          <span className="text-sm font-bold text-slate-600">
+          <span className="rounded-lg bg-[#ff6b1a] px-3 py-2 text-[10px] font-bold text-white">
             Page {currentPage} of {totalPages}
           </span>
           <button 
             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages}
-            className="p-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-all"
+            className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 disabled:opacity-40"
           >
             <ChevronRight size={20} />
           </button>

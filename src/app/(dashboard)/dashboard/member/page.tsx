@@ -46,6 +46,35 @@ function MemberDashboardContent() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    if (userRole !== "COACH") return;
+    let cancelled = false;
+    const refreshRequests = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(`${API_BASE}/profile-edit-requests/coach`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (!response.ok || cancelled) return;
+        const data = await response.json();
+        setEditRequests(Array.isArray(data) ? data : []);
+      } catch {
+        // Keep the currently rendered requests and retry on the next interval.
+      }
+    };
+    const onNotification = () => refreshRequests();
+    const interval = window.setInterval(refreshRequests, 10000);
+    window.addEventListener("tnja:notification", onNotification);
+    window.addEventListener("focus", onNotification);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener("tnja:notification", onNotification);
+      window.removeEventListener("focus", onNotification);
+    };
+  }, [userRole]);
+
   const fetchData = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -412,6 +441,7 @@ function MemberDashboardContent() {
         {/* Profile Edit Requests — Coach Only */}
         {userRole === "COACH" && (
           <motion.div
+            id="profile-edit-requests"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200"
